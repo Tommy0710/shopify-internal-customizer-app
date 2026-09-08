@@ -191,10 +191,12 @@ Copy `.env.example` → `.env` rồi điền. **Tuyệt đối không commit `.e
 | `DATABASE_URL` | Supabase pooled connection (port 6543) | Supabase → Project Settings → Database → Connection pooling |
 | `DIRECT_URL` | Supabase direct connection (port 5432) | như trên, mục Direct connection |
 | `NODE_ENV` | `development` / `production` | — |
+| `WK_ALLOWED_SHOPS` | **Bắt buộc.** Danh sách shop được vào embedded admin, ngăn cách bằng dấu phẩy. Để trống = chặn tất cả (mọi request `/api/admin/*` trả 403). Không bao giờ dùng `*`. | Domain `.myshopify.com` của shop — production hiện tại là `wildandking-demo.myshopify.com` |
+| `WK_SKIP_HMAC` | Chỉ dùng khi dev cục bộ. Đặt `1` để bỏ qua xác thực HMAC của App Proxy / webhook / OAuth callback. **Tuyệt đối không đặt trên Vercel** — app sẽ ném lỗi nếu bật cùng `NODE_ENV=production`. | Tự đặt trong `.env` cục bộ; mặc định để trống |
 
-**Trên Vercel:** khai báo cùng bộ biến này ở Settings → Environment Variables (scope `Production`). Sau khi đổi biến phải **Redeploy** thì mới có hiệu lực.
+**Trên Vercel:** khai báo cùng bộ biến này ở Settings → Environment Variables (scope `Production`) — **trừ `WK_SKIP_HMAC`, biến này không bao giờ được khai trên Vercel**. `WK_ALLOWED_SHOPS` thì **bắt buộc phải có**: thiếu nó, embedded admin trả 403 cho mọi request. Sau khi đổi biến phải **Redeploy** thì mới có hiệu lực.
 
-> 🔐 Ở `NODE_ENV=development`, các route proxy/webhook **bỏ qua kiểm tra HMAC** để dễ test. Ở production HMAC bắt buộc. Không bao giờ chạy production với `NODE_ENV=development`.
+> 🔐 **Xác thực HMAC luôn bật ở mọi môi trường.** Trước đây nó được suy ra từ `NODE_ENV`, nghĩa là mọi môi trường không phải production — kể cả preview deployment công khai — đều chạy không xác thực; điều đó đã bị gỡ bỏ. Cách duy nhất để tắt là đặt tường minh `WK_SKIP_HMAC=1` trong `.env` cục bộ, và app sẽ **ném lỗi, từ chối phục vụ request** nếu biến này bật cùng `NODE_ENV=production`.
 
 ### 🔑 Lấy giá trị `.env` ở đâu
 
@@ -409,11 +411,10 @@ Trạng thái hiện tại: hạ tầng đã chạy (Vercel + Supabase + OAuth +
 1. **Sửa lệch key giữa API và UI Dashboard.**
    `GET /api/admin/orders` trả về `{ jobs, draftDesigns }`, nhưng `src/app/page.tsx` lại đọc `orderData.designs` → KPI luôn hiển thị 0. Ngoài ra code lọc theo `status === "READY_FOR_PRODUCTION"` trong khi schema chỉ có `NEW`/`IN_PRODUCTION`/`QC`/`SHIPPED`. Cần thống nhất tên trường và tập status.
 
-2. **Bổ sung xác thực cho `/api/admin/*`.**
-   Hai route này hiện **không kiểm tra danh tính** — bất kỳ ai biết URL đều gọi được và đọc/sửa dữ liệu đơn hàng. Cần verify session token của App Bridge (hoặc tối thiểu kiểm HMAC/`shop` param).
+2. ~~**Bổ sung xác thực cho `/api/admin/*`.**~~ ✅ **Đã xong (P0).** Mọi route `/api/admin/*` verify session token của App Bridge qua `requireAdminSession()` và đối chiếu shop với `WK_ALLOWED_SHOPS`.
 
-3. **`/api/cart/validate` chưa xác thực và đang hardcode fallback.**
-   Route này tạo record `Design` mà không kiểm chữ ký; `shop` mặc định về `wildandking-demo.myshopify.com`, `productId` fallback `"8129384729101"`, giá fallback `65`. Nên đưa route này qua App Proxy (`/api/proxy/cart-validate`) để dùng chung cơ chế HMAC.
+3. **`/api/cart/validate` vẫn hardcode fallback.**
+   Chữ ký App Proxy **đã được kiểm** (P0), nhưng `shop` vẫn mặc định về `wildandking-demo.myshopify.com`, `productId` fallback `"8129384729101"`, giá fallback `65`. P1 sẽ thay thế route này.
 
 4. **Kiểm thử webhook thật.** Đặt một đơn hàng test có `_custom_design_id` và xác nhận `ProductionJob` được tạo. Đây là mắt xích chưa được verify end-to-end.
 
@@ -427,7 +428,7 @@ Trạng thái hiện tại: hạ tầng đã chạy (Vercel + Supabase + OAuth +
 
 ### 🟢 Nên có
 
-10. **Viết test** — hiện chưa có test nào. Ưu tiên: `pricingEngine.ts` (unit), `hmac.ts` (unit), luồng add-to-cart (E2E).
+10. **Mở rộng test** — `npm test` (Vitest) đã phủ `hmac.ts`, session token, guard `/api/admin/*`, guard `/api/cart/validate` và validate shop domain. Còn thiếu: `pricingEngine.ts` (unit) và luồng add-to-cart (E2E).
 11. **Upload ảnh preview thiết kế** — `Design.previewUrl` đã có trong schema nhưng chưa có luồng sinh/upload ảnh (cân nhắc Supabase Storage).
 12. **Xuất file cho xưởng** — nút tải PDF/PNG spec sản xuất từ tab Production Queue.
 13. **CRUD OptionGroup/OptionValue trong Admin UI** — hiện chỉ upsert được `ProductConfig`; muốn thêm màu da mới vẫn phải sửa `seed.mjs` hoặc vào Prisma Studio.

@@ -7,6 +7,25 @@ từng bị commit vào git.
 > trong `README.md` (đã xoá ở commit của P0). Giá trị vẫn nằm trong git
 > history, nên **hai secret đó phải được rotate** — xoá file không đủ.
 
+## 0. ⛔ TRƯỚC KHI MERGE P0 VÀO `main`
+
+> **`WK_ALLOWED_SHOPS` phải được đặt trên Vercel TRƯỚC khi P0 merge vào
+> `main`.** Merge vào `main` tự động deploy. Kể từ P0, mọi route
+> `/api/admin/*` đòi session token của App Bridge và đối chiếu shop với
+> `WK_ALLOWED_SHOPS`; biến này thiếu ⇒ `getAllowedShops()` trả `[]` ⇒ **mọi
+> request admin trả 403** và embedded admin không dùng được.
+
+1. Vercel → project `wild-king-customizer` → Settings → Environment Variables
+   (scope **Production**) → thêm:
+   `WK_ALLOWED_SHOPS = wildandking-demo.myshopify.com`
+   (nhiều shop thì ngăn cách bằng dấu phẩy; **không bao giờ** dùng `*`).
+2. Xác nhận `SHOPIFY_API_KEY` và `SHOPIFY_API_SECRET` đều có giá trị ở scope
+   Production. Secret rỗng ⇒ mọi session token bị từ chối (401).
+3. Xác nhận **`WK_SKIP_HMAC` KHÔNG tồn tại** trên Vercel. Nếu có và bằng `1`,
+   app sẽ ném lỗi và từ chối phục vụ request ở production.
+4. Merge → Vercel deploy → mở app từ trong Shopify Admin và xác nhận
+   dashboard load được số liệu (không có banner đỏ 401/403).
+
 ## 1. Shopify API secret
 
 1. Shopify Partners → Apps → **Wild & King Customizer** → API credentials.
@@ -42,8 +61,11 @@ Access token lưu trong bảng `Shop` không tự hết hạn. Nếu cần thu h
 
 ## 4. Sau khi rotate
 
-- [ ] Xác nhận không còn secret trong file đang theo dõi:
-      `git grep -n "shpss_\|pooler.supabase.com"`
+- [ ] Xác nhận không còn **giá trị** secret nào trong file đang theo dõi —
+      grep theo giá trị vừa rotate, không grep theo mẫu chung (chính dòng này
+      chứa mẫu, nên grep mẫu sẽ luôn tự khớp):
+      `git grep -nF "<client secret cũ>" ; git grep -nF "<password Supabase cũ>"`
+      Kỳ vọng: cả hai lệnh không in ra gì.
 - [ ] Repo vẫn để **private**.
 - [ ] Ghi lại ngày rotate ở cuối file này.
 

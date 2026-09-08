@@ -866,13 +866,21 @@ print("Đã xoá khối credential")
 PY
 ```
 
-- [ ] **Step 3: Xác nhận không còn secret nào trong file đang theo dõi**
+- [ ] **Step 3: Xác nhận không còn *giá trị* secret nào trong file đang theo dõi**
 
-Run:
+Tiêu chí cũ ("grep mẫu `shpss_\|pooler.supabase.com` phải in ra `SẠCH`") là
+**không thể thoả mãn**: chính runbook mà kế hoạch này yêu cầu tạo có chứa mẫu
+đó, nên grep luôn tự khớp. Kiểm theo **giá trị** thật, không theo mẫu.
+
+Run (thay hai placeholder bằng giá trị thật, đọc từ `.env` cục bộ — không dán
+vào commit, không dán vào transcript):
 ```bash
-grep -rn "shpss_\|pooler.supabase.com:6543/postgres" README.md docs/ || echo "SẠCH"
+SECRET="$(grep -E '^SHOPIFY_API_SECRET=' .env | cut -d= -f2- | tr -d '"')"
+DBPASS="$(grep -E '^DIRECT_URL=' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
+git grep -nF -- "$SECRET" -- README.md docs/ && echo "CÒN SECRET" || echo "SẠCH"
+git grep -nF -- "$DBPASS"  -- README.md docs/ && echo "CÒN SECRET" || echo "SẠCH"
 ```
-Expected: in ra `SẠCH`
+Expected: cả hai lệnh in ra `SẠCH` (không dòng nào khớp).
 
 - [ ] **Step 4: Viết runbook rotate**
 
