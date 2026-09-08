@@ -54,4 +54,53 @@ describe("migrateSvgIds", () => {
     expect(twice.svg).toBe(once.svg);
     expect(twice.renamed).toEqual([]);
   });
+
+  it("does not rewrite data-id or xml:id — only the real id attribute", () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <rect data-id="fish-thing" xml:id="fish-thing" id="fish-shape"/>
+    </svg>`;
+    const { svg, renamed } = migrateSvgIds(source);
+    expect(svg).toContain(`data-id="fish-thing"`);
+    expect(svg).toContain(`xml:id="fish-thing"`);
+    expect(svg).toContain(`id="animal-shape"`);
+    expect(renamed).toEqual(["fish-shape"]);
+  });
+
+  it("renames xlink:href alongside href", () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="fish-shape" d="M0 0h1v1H0z"/>
+      <use xlink:href="#fish-shape"/>
+    </svg>`;
+    const { svg } = migrateSvgIds(source);
+    expect(svg).toContain(`xlink:href="#animal-shape"`);
+  });
+
+  it("leaves ids with characters outside [A-Za-z0-9_-] untouched (intentional — contract ids are kebab-case only)", () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="fish-eye.left" d="M0 0h1v1H0z"/>
+    </svg>`;
+    const { svg, renamed } = migrateSvgIds(source);
+    expect(svg).toBe(source);
+    expect(renamed).toEqual([]);
+  });
+
+  it("reports a collision when the animal-* target id already exists in the source", () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="fish-shape" d="M0 0h1v1H0z"/>
+      <path id="animal-shape" d="M1 1h1v1H1z"/>
+    </svg>`;
+    const { svg, renamed, collisions } = migrateSvgIds(source);
+    expect(svg).toContain(`id="animal-shape"`);
+    expect(renamed).toEqual(["fish-shape"]);
+    expect(collisions).toEqual(["fish-shape"]);
+  });
+
+  it("leaves collisions empty when there is no id clash", () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="fish-shape" d="M0 0h1v1H0z"/>
+      <clipPath id="fish-clip"><use href="#fish-shape"/></clipPath>
+    </svg>`;
+    const { collisions } = migrateSvgIds(source);
+    expect(collisions).toEqual([]);
+  });
 });
