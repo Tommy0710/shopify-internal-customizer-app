@@ -65,30 +65,21 @@ export function validateSvgContract(root: Element | null | undefined): Validatio
   // Guide §8: root phải nằm trong namespace SVG. Một tài liệu HTML có thẻ tên
   // "svg" sẽ qua được kiểm tra localName ở trên nhưng không phải SVG thật —
   // clipPath và <use> sẽ không hoạt động.
-  // Note: Check both namespaceURI and explicit xmlns attribute. LinkedOM may
-  // default to XHTML namespace regardless of xmlns, so we check the attribute
-  // to distinguish intentional XHTML from default behavior.
-  const declaredXmlns = root.getAttribute("xmlns");
-  const isWrongNamespace =
-    (declaredXmlns && declaredXmlns !== SVG_NAMESPACE) ||
-    (root.namespaceURI && root.namespaceURI !== SVG_NAMESPACE && declaredXmlns === "http://www.w3.org/1999/xhtml");
-
-  if (isWrongNamespace) {
+  if (root.namespaceURI !== SVG_NAMESPACE) {
     report.checks.push({
       id: SVG_ROOT_ID,
       status: "wrong-element",
       element: root.namespaceURI ?? "(no namespace)",
       hint: `Root must be in the ${SVG_NAMESPACE} namespace.`,
     });
-  } else {
-    report.checks.push({ id: SVG_ROOT_ID, status: "ok", element: "svg" });
+    return report;
   }
 
+  report.checks.push({ id: SVG_ROOT_ID, status: "ok", element: "svg" });
   report.viewBox = root.getAttribute("viewBox");
 
   for (const required of REQUIRED_ELEMENTS) {
     if (required.id === SVG_ROOT_ID) {
-      // Already checked above
       continue;
     }
 

@@ -97,11 +97,35 @@ describe("validateSvgContract", () => {
     }
   });
 
-  it("rejects a root that is not in the SVG namespace", () => {
+  it("rejects a root that is not in the SVG namespace (explicit XHTML)", () => {
     const html = `<svg id="wallet-preview" xmlns="http://www.w3.org/1999/xhtml"><g id="stitches" fill="var(--wallet-stitches)"></g></svg>`;
     const report = validateSvgContract(parseSvg(html));
     expect(report.valid).toBe(false);
     expect(statusOf(report, "wallet-preview")).toBe("wrong-element");
+  });
+
+  it("rejects a root with no xmlns attribute", () => {
+    const svg = `<svg id="wallet-preview"><g id="stitches" fill="var(--wallet-stitches)"></g></svg>`;
+    const report = validateSvgContract(parseSvg(svg));
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "wallet-preview")).toBe("wrong-element");
+  });
+
+  it("rejects a root with a non-XHTML wrong namespace", () => {
+    const svg = `<svg id="wallet-preview" xmlns="http://example.com/custom"><g id="stitches" fill="var(--wallet-stitches)"></g></svg>`;
+    const report = validateSvgContract(parseSvg(svg));
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "wallet-preview")).toBe("wrong-element");
+  });
+
+  it("accepts a correctly namespaced SVG even when other elements are missing", () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview"><g id="stitches" fill="var(--wallet-stitches)"></g></svg>`;
+    const report = validateSvgContract(parseSvg(svg));
+    expect(report.valid).toBe(false);
+    // Namespace check should pass
+    expect(statusOf(report, "wallet-preview")).toBe("ok");
+    // But other required elements should be missing
+    expect(statusOf(report, "body-artwork")).toBe("missing");
   });
 
   it("returns a null viewBox rather than throwing when the attribute is absent", () => {
