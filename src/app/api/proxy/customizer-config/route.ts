@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { verifyShopifyProxySignature } from "@/lib/hmac";
+import { hmacBypassEnabled, verifyShopifyProxySignature } from "@/lib/hmac";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const shop = url.searchParams.get("shop");
     const productId = url.searchParams.get("productId");
 
-    if (process.env.NODE_ENV === "production") {
+    if (!hmacBypassEnabled()) {
       const isValid = verifyShopifyProxySignature(url.searchParams);
       if (!isValid) {
         return NextResponse.json({ error: "Invalid HMAC signature" }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
+import { hmacBypassEnabled } from "@/lib/hmac";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   const calculatedHmac = crypto.createHmac("sha256", secret).update(queryString).digest("hex");
 
-  if (calculatedHmac !== hmac && process.env.NODE_ENV === "production") {
+  if (calculatedHmac !== hmac && !hmacBypassEnabled()) {
     return NextResponse.json({ error: "Invalid HMAC signature" }, { status: 400 });
   }
 

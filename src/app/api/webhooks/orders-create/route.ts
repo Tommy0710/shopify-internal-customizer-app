@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { verifyShopifyWebhook } from "@/lib/hmac";
+import { hmacBypassEnabled, verifyShopifyWebhook } from "@/lib/hmac";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const hmacHeader = req.headers.get("x-shopify-hmac-sha256");
     const shopHeader = req.headers.get("x-shopify-shop-domain") || "";
 
-    if (process.env.NODE_ENV === "production") {
+    if (!hmacBypassEnabled()) {
       const isValid = verifyShopifyWebhook(rawBody, hmacHeader);
       if (!isValid) {
         return NextResponse.json({ error: "Invalid HMAC" }, { status: 401 });
