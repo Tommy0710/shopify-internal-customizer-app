@@ -196,49 +196,16 @@ Copy `.env.example` → `.env` rồi điền. **Tuyệt đối không commit `.e
 
 > 🔐 Ở `NODE_ENV=development`, các route proxy/webhook **bỏ qua kiểm tra HMAC** để dễ test. Ở production HMAC bắt buộc. Không bao giờ chạy production với `NODE_ENV=development`.
 
-### 🔑 File `.env` thực tế đang dùng (bản local dev)
+### 🔑 Lấy giá trị `.env` ở đâu
 
-> ### ⛔ CẢNH BÁO — ĐỌC TRƯỚC KHI LÀM BẤT CỨ ĐIỀU GÌ VỚI KHỐI DƯỚI
->
-> Khối này chứa **credential production thật**. Repo `shopify-internal-customizer-app` đã được đặt **PRIVATE** riêng vì lý do này.
->
-> - **KHÔNG** đổi repo sang public khi khối này còn ở đây. Xóa đi vẫn còn trong git history — phải rotate credential.
-> - **KHÔNG** copy nội dung này lên Slack / Lark / issue / screenshot.
-> - Chỉ chia sẻ quyền truy cập repo cho người thực sự cần.
-> - Khi có người rời dự án: rotate `SHOPIFY_API_SECRET` (Partners Dashboard) và đổi mật khẩu DB (Supabase → Settings → Database → Reset password).
->
-> Khi không cần nữa, xóa nguyên mục "🔑 File `.env` thực tế đang dùng" này đi — phần bảng biến môi trường phía trên đã đủ để setup.
+Giá trị thật **không** được ghi trong repo. Lấy từ:
 
-Tạo file `.env` ở thư mục gốc dự án với nội dung sau:
+- `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` — Shopify Partners → App → API credentials
+- `DATABASE_URL`, `DIRECT_URL` — Supabase → Project Settings → Database
+- `WK_ALLOWED_SHOPS` — `wildandking-demo.myshopify.com`
+- `WK_SKIP_HMAC` — để trống, trừ khi test cục bộ
 
-```dotenv
-# Shopify App Credentials
-SHOPIFY_API_KEY="21102b2e2138173c5ab87e5ad38ef1e4"
-SHOPIFY_API_SECRET="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"
-SHOPIFY_APP_URL="http://localhost:3000"
-SCOPES="read_products,write_products,read_orders,write_orders,read_themes,write_themes"
-
-# Database connection string (Supabase Postgres - project wild-king-customizer)
-DATABASE_URL="postgresql://postgres.jdobnvvorpkoqkpxcdhw:fjjrx9QOi9mvs4lZ2Lrn0AIvbW7m@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
-DIRECT_URL="postgresql://postgres.jdobnvvorpkoqkpxcdhw:fjjrx9QOi9mvs4lZ2Lrn0AIvbW7m@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-
-# Node Environment
-NODE_ENV="development"
-```
-
-**Khác biệt khi chạy trên Vercel (Production):** dùng đúng bộ trên nhưng đổi 2 biến:
-
-```dotenv
-SHOPIFY_APP_URL="https://wild-king-customizer.vercel.app"
-NODE_ENV="production"
-```
-
-Ghi chú:
-- `DATABASE_URL` (port **6543**) là pooled connection — bắt buộc giữ `?pgbouncer=true&connection_limit=1` vì Vercel chạy serverless, mỗi request là một instance mới.
-- `DIRECT_URL` (port **5432**) chỉ Prisma dùng lúc `db push` / `migrate`, không dùng ở runtime.
-- Cả 2 URL dùng chung 1 mật khẩu DB — đổi mật khẩu Supabase là phải sửa cả hai (ở `.env` local **và** Vercel Environment Variables).
-- `.env` đã nằm trong `.gitignore` nên sẽ không bị commit; file README này mới là nơi chứa giá trị.
-- File `.env.local` trong repo chỉ chứa `VERCEL_OIDC_TOKEN` do Vercel CLI tự sinh — không cần tạo tay.
+Xem `docs/runbooks/credential-rotation.md` khi cần đổi secret.
 
 ---
 
