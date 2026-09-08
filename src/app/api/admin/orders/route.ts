@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/requireAdminSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAdminSession(req);
+  if ("response" in auth) return auth.response;
   try {
     const url = new URL(req.url);
     const status = url.searchParams.get("status") || undefined;
@@ -41,6 +44,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const auth = await requireAdminSession(req);
+  if ("response" in auth) return auth.response;
   try {
     const body = await req.json();
     const { jobId, status, notes } = body;

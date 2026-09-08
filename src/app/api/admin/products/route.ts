@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/requireAdminSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAdminSession(req);
+  if ("response" in auth) return auth.response;
   try {
     const configs = await db.productConfig.findMany({
       include: {
@@ -29,6 +32,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAdminSession(req);
+  if ("response" in auth) return auth.response;
   try {
     const body = await req.json();
     const {
