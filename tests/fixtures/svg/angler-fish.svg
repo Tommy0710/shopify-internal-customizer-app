@@ -1,0 +1,761 @@
+<svg
+  id="wallet-preview"
+  class="wallet-preview"
+  viewBox="0 0 1427 1102"
+  xmlns="http://www.w3.org/2000/svg"
+  aria-hidden="true"
+  style="--wallet-stitches: #E7C337"
+>
+  <defs>
+    <path
+      id="wallet-body-shape"
+      d="M128 49C87 47 63 70 62 111L59 993C59 1037 76 1058 112 1060L1308 1062C1345 1061 1366 1045 1366 1008L1359 115C1358 72 1340 49 1300 48Z"
+    />
+    <path
+      id="animal-shape"
+      d="M410 532C412 514 429 494 434 476C444 441 475 402 515 381C553 343 598 321 650 319C720 315 752 335 809 350C839 359 864 371 890 376C927 317 967 270 1028 250C1041 242 1055 248 1054 263C1047 303 1034 353 1025 396L1014 442C1049 474 1079 511 1092 550C1093 555 1096 557 1103 553C1129 540 1155 527 1175 526C1187 526 1196 533 1191 546C1185 561 1170 578 1161 599C1147 629 1147 647 1150 670L1154 702C1156 715 1147 727 1135 725C1109 722 1091 705 1078 682C1075 676 1071 676 1065 682C1020 726 963 763 901 785C891 788 889 791 889 804C888 827 892 848 899 870C905 888 902 900 889 902C877 903 856 892 839 882C806 863 788 842 771 812C767 805 764 801 757 803C695 820 636 825 575 815C512 807 454 779 410 742C362 701 333 649 322 600C316 574 318 547 321 526C323 515 327 509 338 511C365 516 388 524 410 532Z"
+    />
+    <path
+      id="hook-shape"
+      d="M386 237C407 187 446 151 494 135C533 122 578 126 616 142C668 164 696 204 703 256C707 279 704 302 699 319L663 319C670 299 671 279 668 260C663 223 641 193 606 179C574 166 537 164 507 171C470 181 442 205 426 236C423 242 424 248 428 255C436 272 439 291 430 307C421 323 404 327 388 326C365 324 347 311 345 291C342 267 356 246 377 240Z"
+    />
+    <path
+      id="pocket-back-shape"
+      d="M42 415L66 400C208 312 324 310 457 341C492 349 519 356 543 366C716 420 878 443 1017 403C1065 380 1106 345 1155 337C1220 324 1273 337 1352 349L1380 353.3L1380 1100L42 1100Z"
+    />
+    <path
+      id="pocket-front-shape"
+      d="M42 570.5L62 559C177 493 293 467 393 486L432 493C645 547 869 596 1084 521C1182 474 1238 483 1353 497L1380 500.3L1380 1100L42 1100Z"
+    />
+    <linearGradient id="thread-roundness" gradientUnits="userSpaceOnUse" x1="0" y1="-8" x2="0" y2="8">
+      <stop offset="0" stop-color="#30220B" stop-opacity=".38" />
+      <stop offset=".32" stop-color="#FFF4C2" stop-opacity=".38" />
+      <stop offset=".56" stop-color="#FFF4C2" stop-opacity=".06" />
+      <stop offset="1" stop-color="#48300B" stop-opacity=".4" />
+    </linearGradient>
+    <g id="stitch-unit" fill="none" stroke-linecap="round">
+      <path d="M-30 -18H30V18H-30Z" fill="url(#thread-roundness)" />
+      <path id="stitch-twist" d="M-19 -3C-11 -2 -5 3 2 4C9 5 15 3 19 0M-11 -4C-5 -1 0 0 6 0C11 1 15 0 19 -1" stroke="#765309" stroke-opacity=".38" stroke-width=".75" />
+      <path id="stitch-highlight" d="M-18 -4C-10 -2 -6 1 1 2C8 4 14 2 18 0M-14 -4C-6 -3 0 -2 8 -1C13 0 17 -1 19 -2" stroke="#FFF8D1" stroke-opacity=".5" stroke-width=".85" />
+      <path d="M-16 -2C-10 1 -6 4 1 5C8 6 14 4 17 2" stroke="#FFF8D1" stroke-opacity=".25" stroke-width=".5" />
+    </g>
+
+    <path id="stitch-shape-01" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(95.000 150.000) rotate(-82)" />
+    <clipPath id="stitch-clip-01"><use href="#stitch-shape-01" /></clipPath>
+    <path id="stitch-shape-02" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.882 198.500) rotate(-82)" />
+    <clipPath id="stitch-clip-02"><use href="#stitch-shape-02" /></clipPath>
+    <path id="stitch-shape-03" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.765 247.000) rotate(-82)" />
+    <clipPath id="stitch-clip-03"><use href="#stitch-shape-03" /></clipPath>
+    <path id="stitch-shape-04" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.647 295.500) rotate(-82)" />
+    <clipPath id="stitch-clip-04"><use href="#stitch-shape-04" /></clipPath>
+    <path id="stitch-shape-05" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.529 344.000) rotate(-82)" />
+    <clipPath id="stitch-clip-05"><use href="#stitch-shape-05" /></clipPath>
+    <path id="stitch-shape-06" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.412 392.500) rotate(-82)" />
+    <clipPath id="stitch-clip-06"><use href="#stitch-shape-06" /></clipPath>
+    <path id="stitch-shape-07" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.294 441.000) rotate(-82)" />
+    <clipPath id="stitch-clip-07"><use href="#stitch-shape-07" /></clipPath>
+    <path id="stitch-shape-08" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.176 489.500) rotate(-82)" />
+    <clipPath id="stitch-clip-08"><use href="#stitch-shape-08" /></clipPath>
+    <path id="stitch-shape-09" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(94.059 538.000) rotate(-82)" />
+    <clipPath id="stitch-clip-09"><use href="#stitch-shape-09" /></clipPath>
+    <path id="stitch-shape-10" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.941 586.500) rotate(-82)" />
+    <clipPath id="stitch-clip-10"><use href="#stitch-shape-10" /></clipPath>
+    <path id="stitch-shape-11" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.824 635.000) rotate(-82)" />
+    <clipPath id="stitch-clip-11"><use href="#stitch-shape-11" /></clipPath>
+    <path id="stitch-shape-12" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.706 683.500) rotate(-82)" />
+    <clipPath id="stitch-clip-12"><use href="#stitch-shape-12" /></clipPath>
+    <path id="stitch-shape-13" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.588 732.000) rotate(-82)" />
+    <clipPath id="stitch-clip-13"><use href="#stitch-shape-13" /></clipPath>
+    <path id="stitch-shape-14" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.471 780.500) rotate(-82)" />
+    <clipPath id="stitch-clip-14"><use href="#stitch-shape-14" /></clipPath>
+    <path id="stitch-shape-15" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.353 829.000) rotate(-82)" />
+    <clipPath id="stitch-clip-15"><use href="#stitch-shape-15" /></clipPath>
+    <path id="stitch-shape-16" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.235 877.500) rotate(-82)" />
+    <clipPath id="stitch-clip-16"><use href="#stitch-shape-16" /></clipPath>
+    <path id="stitch-shape-17" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.118 926.000) rotate(-82)" />
+    <clipPath id="stitch-clip-17"><use href="#stitch-shape-17" /></clipPath>
+    <path id="stitch-shape-18" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(93.000 974.500) rotate(-82)" />
+    <clipPath id="stitch-clip-18"><use href="#stitch-shape-18" /></clipPath>
+    <path id="stitch-shape-19" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1323.000 154.000) rotate(-82)" />
+    <clipPath id="stitch-clip-19"><use href="#stitch-shape-19" /></clipPath>
+    <path id="stitch-shape-20" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1323.500 203.000) rotate(-82)" />
+    <clipPath id="stitch-clip-20"><use href="#stitch-shape-20" /></clipPath>
+    <path id="stitch-shape-21" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1324.000 252.000) rotate(-82)" />
+    <clipPath id="stitch-clip-21"><use href="#stitch-shape-21" /></clipPath>
+    <path id="stitch-shape-22" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1324.500 301.000) rotate(-82)" />
+    <clipPath id="stitch-clip-22"><use href="#stitch-shape-22" /></clipPath>
+    <path id="stitch-shape-23" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1325.000 350.000) rotate(-82)" />
+    <clipPath id="stitch-clip-23"><use href="#stitch-shape-23" /></clipPath>
+    <path id="stitch-shape-24" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1325.500 399.000) rotate(-82)" />
+    <clipPath id="stitch-clip-24"><use href="#stitch-shape-24" /></clipPath>
+    <path id="stitch-shape-25" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1326.000 448.000) rotate(-82)" />
+    <clipPath id="stitch-clip-25"><use href="#stitch-shape-25" /></clipPath>
+    <path id="stitch-shape-26" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1326.500 497.000) rotate(-82)" />
+    <clipPath id="stitch-clip-26"><use href="#stitch-shape-26" /></clipPath>
+    <path id="stitch-shape-27" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1327.000 546.000) rotate(-82)" />
+    <clipPath id="stitch-clip-27"><use href="#stitch-shape-27" /></clipPath>
+    <path id="stitch-shape-28" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1327.500 595.000) rotate(-82)" />
+    <clipPath id="stitch-clip-28"><use href="#stitch-shape-28" /></clipPath>
+    <path id="stitch-shape-29" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1328.000 644.000) rotate(-82)" />
+    <clipPath id="stitch-clip-29"><use href="#stitch-shape-29" /></clipPath>
+    <path id="stitch-shape-30" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1328.500 693.000) rotate(-82)" />
+    <clipPath id="stitch-clip-30"><use href="#stitch-shape-30" /></clipPath>
+    <path id="stitch-shape-31" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1329.000 742.000) rotate(-82)" />
+    <clipPath id="stitch-clip-31"><use href="#stitch-shape-31" /></clipPath>
+    <path id="stitch-shape-32" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1329.500 791.000) rotate(-82)" />
+    <clipPath id="stitch-clip-32"><use href="#stitch-shape-32" /></clipPath>
+    <path id="stitch-shape-33" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1330.000 840.000) rotate(-82)" />
+    <clipPath id="stitch-clip-33"><use href="#stitch-shape-33" /></clipPath>
+    <path id="stitch-shape-34" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1330.500 889.000) rotate(-82)" />
+    <clipPath id="stitch-clip-34"><use href="#stitch-shape-34" /></clipPath>
+    <path id="stitch-shape-35" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1331.000 938.000) rotate(-82)" />
+    <clipPath id="stitch-clip-35"><use href="#stitch-shape-35" /></clipPath>
+    <path id="stitch-shape-36" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(114.000 1019.000) rotate(42)" />
+    <clipPath id="stitch-clip-36"><use href="#stitch-shape-36" /></clipPath>
+    <path id="stitch-shape-37" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(161.000 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-37"><use href="#stitch-shape-37" /></clipPath>
+    <path id="stitch-shape-38" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(211.200 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-38"><use href="#stitch-shape-38" /></clipPath>
+    <path id="stitch-shape-39" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(261.400 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-39"><use href="#stitch-shape-39" /></clipPath>
+    <path id="stitch-shape-40" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(311.600 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-40"><use href="#stitch-shape-40" /></clipPath>
+    <path id="stitch-shape-41" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(361.800 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-41"><use href="#stitch-shape-41" /></clipPath>
+    <path id="stitch-shape-42" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(412.000 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-42"><use href="#stitch-shape-42" /></clipPath>
+    <path id="stitch-shape-43" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(462.200 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-43"><use href="#stitch-shape-43" /></clipPath>
+    <path id="stitch-shape-44" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(512.400 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-44"><use href="#stitch-shape-44" /></clipPath>
+    <path id="stitch-shape-45" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(562.600 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-45"><use href="#stitch-shape-45" /></clipPath>
+    <path id="stitch-shape-46" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(612.800 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-46"><use href="#stitch-shape-46" /></clipPath>
+    <path id="stitch-shape-47" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(663.000 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-47"><use href="#stitch-shape-47" /></clipPath>
+    <path id="stitch-shape-48" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(713.200 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-48"><use href="#stitch-shape-48" /></clipPath>
+    <path id="stitch-shape-49" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(763.400 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-49"><use href="#stitch-shape-49" /></clipPath>
+    <path id="stitch-shape-50" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(813.600 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-50"><use href="#stitch-shape-50" /></clipPath>
+    <path id="stitch-shape-51" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(863.800 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-51"><use href="#stitch-shape-51" /></clipPath>
+    <path id="stitch-shape-52" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(914.000 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-52"><use href="#stitch-shape-52" /></clipPath>
+    <path id="stitch-shape-53" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(964.200 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-53"><use href="#stitch-shape-53" /></clipPath>
+    <path id="stitch-shape-54" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1014.400 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-54"><use href="#stitch-shape-54" /></clipPath>
+    <path id="stitch-shape-55" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1064.600 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-55"><use href="#stitch-shape-55" /></clipPath>
+    <path id="stitch-shape-56" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1114.800 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-56"><use href="#stitch-shape-56" /></clipPath>
+    <path id="stitch-shape-57" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1165.000 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-57"><use href="#stitch-shape-57" /></clipPath>
+    <path id="stitch-shape-58" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1215.200 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-58"><use href="#stitch-shape-58" /></clipPath>
+    <path id="stitch-shape-59" d="M21 1C20 6 13 7 6 6C-4 6 -13 1 -21 -3C-22 -6 -16 -7 -10 -5C-1 -3 7 -3 14 -3C19 -3 22 -2 21 1Z" transform="translate(1265.400 1030.000) rotate(0)" />
+    <clipPath id="stitch-clip-59"><use href="#stitch-shape-59" /></clipPath>
+
+    <path id="stitch-punch-shape" d="M-6 -1.8C-2.5 -3 2.8 -2.6 6 -.9L5 1.8C1 3 -3 2.6 -6 .8Z" />
+    <g id="stitch-punch-unit">
+      <use href="#stitch-punch-shape" fill="#0C0B08" stroke="#0C0B08" stroke-width="1.3" stroke-opacity=".3" />
+      <path d="M-4.5 1.5C-1 2.5 2 2.5 4.5 1.4" fill="none" stroke="#C7B991" stroke-width=".7" stroke-opacity=".24" />
+    </g>
+
+    <path id="pocket-back-curve" d="M42 409L66 394C208 306 324 304 457 335C492 343 519 350 543 360C716 414 878 437 1017 397C1065 374 1106 339 1155 331C1220 318 1273 331 1352 343L1380 347.3" />
+    <clipPath id="pocket-back-panel-clip"><use href="#pocket-back-shape" /></clipPath>
+    <path id="pocket-front-curve" d="M42 564.5L62 553C177 487 293 461 393 480L432 487C645 541 869 590 1084 515C1182 468 1238 477 1353 491L1380 494.3" />
+    <clipPath id="pocket-front-panel-clip"><use href="#pocket-front-shape" /></clipPath>
+    <filter id="pocket-contact-shadow" x="-10%" y="-50%" width="120%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.6" />
+    </filter>
+
+    <clipPath id="wallet-body-clip">
+      <use href="#wallet-body-shape" />
+    </clipPath>
+    <clipPath id="animal-clip">
+      <use href="#animal-shape" />
+      <use href="#hook-shape" />
+    </clipPath>
+
+    <linearGradient id="wallet-edge-light" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".08" />
+      <stop offset=".16" stop-color="#FFFFFF" stop-opacity=".04" />
+      <stop offset=".78" stop-color="#000000" stop-opacity=".08" />
+      <stop offset="1" stop-color="#000000" stop-opacity=".14" />
+    </linearGradient>
+    <linearGradient id="pocket-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".12" />
+      <stop offset=".15" stop-color="#FFFFFF" stop-opacity=".02" />
+      <stop offset="1" stop-color="#000000" stop-opacity=".24" />
+    </linearGradient>
+
+    <filter id="wallet-shadow" x="-15%" y="-18%" width="130%" height="145%">
+      <feDropShadow
+        dx="0"
+        dy="20"
+        stdDeviation="18"
+        flood-color="#1D211B"
+        flood-opacity=".38"
+        result="shadow"
+      />
+      <feMerge>
+        <feMergeNode in="shadow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="applique-lift" x="-15%" y="-15%" width="130%" height="140%">
+      <feDropShadow
+        dx="0"
+        dy="2"
+        stdDeviation="1.6"
+        flood-color="#12140F"
+        flood-opacity=".38"
+        result="shadow"
+      />
+      <feMerge>
+        <feMergeNode in="shadow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="leather-grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".012 .11"
+        numOctaves="3"
+        seed="23"
+        result="noise"
+      />
+      <feColorMatrix
+        in="noise"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .34 0"
+      />
+    </filter>
+    <filter id="thread-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow
+        dx="1.5"
+        dy="1"
+        stdDeviation=".7"
+        flood-opacity=".45"
+        result="shadow"
+      />
+      <feMerge>
+        <feMergeNode in="shadow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g id="wallet-base" filter="url(#wallet-shadow)">
+    <use href="#wallet-body-shape" fill="#4E4A35" />
+    <use href="#wallet-body-shape" fill="url(#wallet-edge-light)" />
+  </g>
+
+  <image
+    id="body-artwork"
+    x="55"
+    y="47"
+    width="1315"
+    height="1017"
+    clip-path="url(#wallet-body-clip)"
+    preserveAspectRatio="xMidYMid slice"
+    hidden="hidden"
+  />
+
+  <g id="wallet-surface" clip-path="url(#wallet-body-clip)" pointer-events="none">
+    <rect
+      x="40"
+      y="35"
+      width="1350"
+      height="1045"
+      fill="#FFFFFF"
+      filter="url(#leather-grain)"
+      opacity=".21"
+      style="mix-blend-mode: soft-light"
+    />
+  </g>
+
+  <g id="wallet-pockets" clip-path="url(#wallet-body-clip)" pointer-events="none">
+    <g id="pocket-back">
+      <use href="#pocket-back-curve" fill="none" stroke="#070806" stroke-width="16" stroke-opacity=".34" transform="translate(0 3)" filter="url(#pocket-contact-shadow)" />
+      <use href="#pocket-back-shape" fill="#4E4A35" />
+      <g id="pocket-back-material" clip-path="url(#pocket-back-panel-clip)">
+        <use href="#body-artwork" transform="translate(0 10)" />
+      </g>
+      <use id="pocket-back-glaze" href="#pocket-back-shape" fill="#11130F" opacity=".07" />
+      <use href="#pocket-back-shape" fill="url(#pocket-sheen)" opacity=".4" />
+      <g clip-path="url(#pocket-back-panel-clip)">
+        <use href="#pocket-back-curve" fill="none" stroke="#070806" stroke-width="10" stroke-opacity=".14" transform="translate(0 16)" filter="url(#pocket-contact-shadow)" />
+      </g>
+      <g id="pocket-back-edge" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path id="pocket-back-opening" d="M42 409L66 394C208 306 324 304 457 335C492 343 519 350 543 360C716 414 878 437 1017 397C1065 374 1106 339 1155 331C1220 318 1273 331 1352 343L1380 347.3L1380 353.3L1352 349C1273 337 1220 324 1155 337C1106 345 1065 380 1017 403C878 443 716 420 543 366C519 356 492 349 457 341C324 310 208 312 66 400L42 415Z" fill="#070806" fill-opacity=".86" />
+        <path id="pocket-back-piping" d="M42 409L66 394C208 306 324 304 457 335C492 343 519 350 543 360C716 414 878 437 1017 397C1065 374 1106 339 1155 331C1220 318 1273 331 1352 343L1380 347.3" stroke="#0C0E0B" stroke-width="1.4" stroke-opacity=".8" />
+        <path id="pocket-back-edge-overlay" d="M42 415L66 400C208 312 324 310 457 341C492 349 519 356 543 366C716 420 878 443 1017 403C1065 380 1106 345 1155 337C1220 324 1273 337 1352 349L1380 353.3L1380 361.3L1352 357C1273 345 1220 332 1155 345C1106 353 1065 388 1017 411C878 451 716 428 543 374C519 364 492 357 457 349C324 318 208 320 66 408L42 423Z" fill="#0C0E0B" fill-opacity=".22" />
+        <path d="M42 415L66 400C208 312 324 310 457 341C492 349 519 356 543 366C716 420 878 443 1017 403C1065 380 1106 345 1155 337C1220 324 1273 337 1352 349L1380 353.3L1380 355.3L1352 351C1273 339 1220 326 1155 339C1106 347 1065 382 1017 405C878 445 716 422 543 368C519 358 492 351 457 343C324 312 208 314 66 402L42 417Z" fill="#FFFFFF" fill-opacity=".13" />
+        <path d="M42 420L66 405C208 317 324 315 457 346C492 354 519 361 543 371C716 425 878 448 1017 408C1065 385 1106 350 1155 342C1220 329 1273 342 1352 354L1380 358.3L1380 361.3L1352 357C1273 345 1220 332 1155 345C1106 353 1065 388 1017 411C878 451 716 428 543 374C519 364 492 357 457 349C324 318 208 320 66 408L42 423Z" fill="#070806" fill-opacity=".18" />
+        <use href="#pocket-back-curve" transform="translate(0 6.7)" stroke="#FFF9E8" stroke-width="1.6" stroke-opacity=".32" />
+        <use href="#pocket-back-curve" transform="translate(0 14)" stroke="#0C0E0B" stroke-width="1.2" stroke-opacity=".5" />
+      </g>
+    </g>
+
+    <g id="pocket-front">
+      <use href="#pocket-front-curve" fill="none" stroke="#070806" stroke-width="16" stroke-opacity=".34" transform="translate(0 3)" filter="url(#pocket-contact-shadow)" />
+      <use href="#pocket-front-shape" fill="#4E4A35" />
+      <g id="pocket-front-material" clip-path="url(#pocket-front-panel-clip)">
+        <use href="#body-artwork" transform="translate(0 19)" />
+      </g>
+      <use id="pocket-front-glaze" href="#pocket-front-shape" fill="#11130F" opacity=".06" />
+      <use href="#pocket-front-shape" fill="url(#pocket-sheen)" opacity=".4" />
+      <g clip-path="url(#pocket-front-panel-clip)">
+        <use href="#pocket-front-curve" fill="none" stroke="#070806" stroke-width="10" stroke-opacity=".14" transform="translate(0 16)" filter="url(#pocket-contact-shadow)" />
+      </g>
+      <g id="pocket-front-edge" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path id="pocket-front-opening" d="M42 564.5L62 553C177 487 293 461 393 480L432 487C645 541 869 590 1084 515C1182 468 1238 477 1353 491L1380 494.3L1380 500.3L1353 497C1238 483 1182 474 1084 521C869 596 645 547 432 493L393 486C293 467 177 493 62 559L42 570.5Z" fill="#070806" fill-opacity=".86" />
+        <path id="pocket-front-piping" d="M42 564.5L62 553C177 487 293 461 393 480L432 487C645 541 869 590 1084 515C1182 468 1238 477 1353 491L1380 494.3" stroke="#0C0E0B" stroke-width="1.4" stroke-opacity=".8" />
+        <path id="pocket-front-edge-overlay" d="M42 570.5L62 559C177 493 293 467 393 486L432 493C645 547 869 596 1084 521C1182 474 1238 483 1353 497L1380 500.3L1380 508.3L1353 505C1238 491 1182 482 1084 529C869 604 645 555 432 501L393 494C293 475 177 501 62 567L42 578.5Z" fill="#0C0E0B" fill-opacity=".22" />
+        <path d="M42 570.5L62 559C177 493 293 467 393 486L432 493C645 547 869 596 1084 521C1182 474 1238 483 1353 497L1380 500.3L1380 502.3L1353 499C1238 485 1182 476 1084 523C869 598 645 549 432 495L393 488C293 469 177 495 62 561L42 572.5Z" fill="#FFFFFF" fill-opacity=".13" />
+        <path d="M42 575.5L62 564C177 498 293 472 393 491L432 498C645 552 869 601 1084 526C1182 479 1238 488 1353 502L1380 505.3L1380 508.3L1353 505C1238 491 1182 482 1084 529C869 604 645 555 432 501L393 494C293 475 177 501 62 567L42 578.5Z" fill="#070806" fill-opacity=".18" />
+        <use href="#pocket-front-curve" transform="translate(0 6.7)" stroke="#FFF9E8" stroke-width="1.6" stroke-opacity=".32" />
+        <use href="#pocket-front-curve" transform="translate(0 14)" stroke="#0C0E0B" stroke-width="1.2" stroke-opacity=".5" />
+      </g>
+    </g>
+  </g>
+
+  <g id="wallet-frame" fill="none" pointer-events="none">
+    <use
+      href="#wallet-body-shape"
+      fill="none"
+      stroke="#171914"
+      stroke-width="18"
+      stroke-linejoin="round"
+    />
+    <use
+      href="#wallet-body-shape"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-opacity=".15"
+      stroke-width="4"
+      transform="translate(0 3)"
+    />
+  </g>
+
+  <g id="animal-applique" filter="url(#applique-lift)">
+    <use href="#animal-shape" fill="#F4D20B" />
+    <use href="#hook-shape" fill="#F4D20B" />
+  </g>
+
+  <image
+    id="animal-artwork"
+    x="285"
+    y="120"
+    width="920"
+    height="790"
+    clip-path="url(#animal-clip)"
+    preserveAspectRatio="xMidYMid slice"
+    hidden="hidden"
+  />
+
+  <g
+    id="animal-outline"
+    fill="none"
+    stroke="#171914"
+    stroke-linejoin="round"
+    pointer-events="none"
+  >
+    <use
+      href="#animal-shape"
+      stroke-width="1.8"
+    />
+    <use
+      href="#hook-shape"
+      stroke-width="1.8"
+    />
+    <path
+      id="animal-mouth"
+      d="M410 532C455 550 498 576 535 604C549 615 561 628 570 640"
+      stroke-width="1.5"
+      stroke-linecap="round"
+    />
+    <path
+      id="animal-fin"
+      d="M790 576C824 555 856 547 883 549C912 549 931 569 934 593C939 623 920 652 894 663C866 674 834 666 805 649"
+      stroke="#171914"
+      stroke-width="1.3"
+      stroke-linecap="round"
+    />
+  </g>
+
+  <g id="animal-eyes" aria-hidden="true" pointer-events="none" stroke="#171914" stroke-width="1.6">
+    <circle id="animal-eye-left" cx="497" cy="450" r="64" fill="#FAFAF7" />
+    <circle id="animal-eye-right" cx="638" cy="483" r="65" fill="#FAFAF7" />
+    <circle id="animal-pupil-left" cx="516" cy="459" r="22" fill="#101111" />
+    <circle id="animal-pupil-right" cx="614" cy="486" r="21.5" fill="#101111" />
+  </g>
+
+  <g id="stitch-punch-marks" fill="#0C0B08" clip-path="url(#wallet-body-clip)" pointer-events="none" aria-hidden="true">
+    <use id="stitch-gap-01-02" href="#stitch-punch-unit" transform="translate(93.951 174.111) rotate(37.615)" />
+    <use id="stitch-gap-02-03" href="#stitch-punch-unit" transform="translate(93.833 222.611) rotate(37.615)" />
+    <use id="stitch-gap-03-04" href="#stitch-punch-unit" transform="translate(93.716 271.111) rotate(37.615)" />
+    <use id="stitch-gap-04-05" href="#stitch-punch-unit" transform="translate(93.598 319.611) rotate(37.615)" />
+    <use id="stitch-gap-05-06" href="#stitch-punch-unit" transform="translate(93.480 368.111) rotate(37.615)" />
+    <use id="stitch-gap-06-07" href="#stitch-punch-unit" transform="translate(93.363 416.611) rotate(37.615)" />
+    <use id="stitch-gap-07-08" href="#stitch-punch-unit" transform="translate(93.245 465.111) rotate(37.615)" />
+    <use id="stitch-gap-08-09" href="#stitch-punch-unit" transform="translate(93.127 513.611) rotate(37.615)" />
+    <use id="stitch-gap-09-10" href="#stitch-punch-unit" transform="translate(93.010 562.111) rotate(37.615)" />
+    <use id="stitch-gap-10-11" href="#stitch-punch-unit" transform="translate(92.892 610.611) rotate(37.615)" />
+    <use id="stitch-gap-11-12" href="#stitch-punch-unit" transform="translate(92.774 659.111) rotate(37.615)" />
+    <use id="stitch-gap-12-13" href="#stitch-punch-unit" transform="translate(92.657 707.611) rotate(37.615)" />
+    <use id="stitch-gap-13-14" href="#stitch-punch-unit" transform="translate(92.539 756.111) rotate(37.615)" />
+    <use id="stitch-gap-14-15" href="#stitch-punch-unit" transform="translate(92.421 804.611) rotate(37.615)" />
+    <use id="stitch-gap-15-16" href="#stitch-punch-unit" transform="translate(92.304 853.111) rotate(37.615)" />
+    <use id="stitch-gap-16-17" href="#stitch-punch-unit" transform="translate(92.186 901.611) rotate(37.615)" />
+    <use id="stitch-gap-17-18" href="#stitch-punch-unit" transform="translate(92.069 950.111) rotate(37.615)" />
+    <use id="stitch-gap-18-36" href="#stitch-punch-unit" transform="translate(93.754 998.798) rotate(30.530)" />
+    <use id="stitch-gap-36-37" href="#stitch-punch-unit" transform="translate(134.468 1030.397) rotate(-31.558)" />
+    <use id="stitch-gap-37-38" href="#stitch-punch-unit" transform="translate(186.100 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-38-39" href="#stitch-punch-unit" transform="translate(236.300 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-39-40" href="#stitch-punch-unit" transform="translate(286.500 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-40-41" href="#stitch-punch-unit" transform="translate(336.700 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-41-42" href="#stitch-punch-unit" transform="translate(386.900 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-42-43" href="#stitch-punch-unit" transform="translate(437.100 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-43-44" href="#stitch-punch-unit" transform="translate(487.300 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-44-45" href="#stitch-punch-unit" transform="translate(537.500 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-45-46" href="#stitch-punch-unit" transform="translate(587.700 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-46-47" href="#stitch-punch-unit" transform="translate(637.900 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-47-48" href="#stitch-punch-unit" transform="translate(688.100 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-48-49" href="#stitch-punch-unit" transform="translate(738.300 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-49-50" href="#stitch-punch-unit" transform="translate(788.500 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-50-51" href="#stitch-punch-unit" transform="translate(838.700 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-51-52" href="#stitch-punch-unit" transform="translate(888.900 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-52-53" href="#stitch-punch-unit" transform="translate(939.100 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-53-54" href="#stitch-punch-unit" transform="translate(989.300 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-54-55" href="#stitch-punch-unit" transform="translate(1039.500 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-55-56" href="#stitch-punch-unit" transform="translate(1089.700 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-56-57" href="#stitch-punch-unit" transform="translate(1139.900 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-57-58" href="#stitch-punch-unit" transform="translate(1190.100 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-58-59" href="#stitch-punch-unit" transform="translate(1240.300 1029.000) rotate(-26.003)" />
+    <use id="stitch-gap-19-20" href="#stitch-punch-unit" transform="translate(1322.260 178.361) rotate(37.699)" />
+    <use id="stitch-gap-20-21" href="#stitch-punch-unit" transform="translate(1322.760 227.361) rotate(37.699)" />
+    <use id="stitch-gap-21-22" href="#stitch-punch-unit" transform="translate(1323.260 276.361) rotate(37.699)" />
+    <use id="stitch-gap-22-23" href="#stitch-punch-unit" transform="translate(1323.760 325.361) rotate(37.699)" />
+    <use id="stitch-gap-23-24" href="#stitch-punch-unit" transform="translate(1324.260 374.361) rotate(37.699)" />
+    <use id="stitch-gap-24-25" href="#stitch-punch-unit" transform="translate(1324.760 423.361) rotate(37.699)" />
+    <use id="stitch-gap-25-26" href="#stitch-punch-unit" transform="translate(1325.260 472.361) rotate(37.699)" />
+    <use id="stitch-gap-26-27" href="#stitch-punch-unit" transform="translate(1325.760 521.361) rotate(37.699)" />
+    <use id="stitch-gap-27-28" href="#stitch-punch-unit" transform="translate(1326.260 570.361) rotate(37.699)" />
+    <use id="stitch-gap-28-29" href="#stitch-punch-unit" transform="translate(1326.760 619.361) rotate(37.699)" />
+    <use id="stitch-gap-29-30" href="#stitch-punch-unit" transform="translate(1327.260 668.361) rotate(37.699)" />
+    <use id="stitch-gap-30-31" href="#stitch-punch-unit" transform="translate(1327.760 717.361) rotate(37.699)" />
+    <use id="stitch-gap-31-32" href="#stitch-punch-unit" transform="translate(1328.260 766.361) rotate(37.699)" />
+    <use id="stitch-gap-32-33" href="#stitch-punch-unit" transform="translate(1328.760 815.361) rotate(37.699)" />
+    <use id="stitch-gap-33-34" href="#stitch-punch-unit" transform="translate(1329.260 864.361) rotate(37.699)" />
+    <use id="stitch-gap-34-35" href="#stitch-punch-unit" transform="translate(1329.760 913.361) rotate(37.699)" />
+  </g>
+
+  <g
+    id="stitches"
+    fill="var(--wallet-stitches)"
+    filter="url(#thread-shadow)"
+    aria-hidden="true"
+  >
+    <g id="stitch-left-01">
+      <use href="#stitch-shape-01" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-01" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-01)"><use href="#stitch-unit" transform="translate(95.000 150.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-02">
+      <use href="#stitch-shape-02" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-02" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-02)"><use href="#stitch-unit" transform="translate(94.882 198.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-03">
+      <use href="#stitch-shape-03" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-03" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-03)"><use href="#stitch-unit" transform="translate(94.765 247.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-04">
+      <use href="#stitch-shape-04" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-04" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-04)"><use href="#stitch-unit" transform="translate(94.647 295.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-05">
+      <use href="#stitch-shape-05" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-05" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-05)"><use href="#stitch-unit" transform="translate(94.529 344.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-06">
+      <use href="#stitch-shape-06" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-06" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-06)"><use href="#stitch-unit" transform="translate(94.412 392.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-07">
+      <use href="#stitch-shape-07" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-07" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-07)"><use href="#stitch-unit" transform="translate(94.294 441.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-08">
+      <use href="#stitch-shape-08" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-08" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-08)"><use href="#stitch-unit" transform="translate(94.176 489.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-09">
+      <use href="#stitch-shape-09" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-09" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-09)"><use href="#stitch-unit" transform="translate(94.059 538.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-10">
+      <use href="#stitch-shape-10" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-10" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-10)"><use href="#stitch-unit" transform="translate(93.941 586.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-11">
+      <use href="#stitch-shape-11" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-11" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-11)"><use href="#stitch-unit" transform="translate(93.824 635.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-12">
+      <use href="#stitch-shape-12" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-12" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-12)"><use href="#stitch-unit" transform="translate(93.706 683.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-13">
+      <use href="#stitch-shape-13" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-13" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-13)"><use href="#stitch-unit" transform="translate(93.588 732.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-14">
+      <use href="#stitch-shape-14" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-14" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-14)"><use href="#stitch-unit" transform="translate(93.471 780.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-15">
+      <use href="#stitch-shape-15" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-15" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-15)"><use href="#stitch-unit" transform="translate(93.353 829.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-16">
+      <use href="#stitch-shape-16" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-16" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-16)"><use href="#stitch-unit" transform="translate(93.235 877.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-17">
+      <use href="#stitch-shape-17" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-17" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-17)"><use href="#stitch-unit" transform="translate(93.118 926.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-left-18">
+      <use href="#stitch-shape-18" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-18" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-18)"><use href="#stitch-unit" transform="translate(93.000 974.500) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-19">
+      <use href="#stitch-shape-19" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-19" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-19)"><use href="#stitch-unit" transform="translate(1323.000 154.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-20">
+      <use href="#stitch-shape-20" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-20" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-20)"><use href="#stitch-unit" transform="translate(1323.500 203.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-21">
+      <use href="#stitch-shape-21" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-21" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-21)"><use href="#stitch-unit" transform="translate(1324.000 252.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-22">
+      <use href="#stitch-shape-22" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-22" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-22)"><use href="#stitch-unit" transform="translate(1324.500 301.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-23">
+      <use href="#stitch-shape-23" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-23" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-23)"><use href="#stitch-unit" transform="translate(1325.000 350.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-24">
+      <use href="#stitch-shape-24" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-24" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-24)"><use href="#stitch-unit" transform="translate(1325.500 399.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-25">
+      <use href="#stitch-shape-25" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-25" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-25)"><use href="#stitch-unit" transform="translate(1326.000 448.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-26">
+      <use href="#stitch-shape-26" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-26" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-26)"><use href="#stitch-unit" transform="translate(1326.500 497.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-27">
+      <use href="#stitch-shape-27" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-27" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-27)"><use href="#stitch-unit" transform="translate(1327.000 546.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-28">
+      <use href="#stitch-shape-28" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-28" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-28)"><use href="#stitch-unit" transform="translate(1327.500 595.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-29">
+      <use href="#stitch-shape-29" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-29" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-29)"><use href="#stitch-unit" transform="translate(1328.000 644.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-30">
+      <use href="#stitch-shape-30" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-30" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-30)"><use href="#stitch-unit" transform="translate(1328.500 693.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-31">
+      <use href="#stitch-shape-31" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-31" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-31)"><use href="#stitch-unit" transform="translate(1329.000 742.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-32">
+      <use href="#stitch-shape-32" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-32" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-32)"><use href="#stitch-unit" transform="translate(1329.500 791.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-33">
+      <use href="#stitch-shape-33" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-33" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-33)"><use href="#stitch-unit" transform="translate(1330.000 840.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-34">
+      <use href="#stitch-shape-34" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-34" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-34)"><use href="#stitch-unit" transform="translate(1330.500 889.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-right-35">
+      <use href="#stitch-shape-35" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-35" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-35)"><use href="#stitch-unit" transform="translate(1331.000 938.000) rotate(-82)" /></g>
+    </g>
+    <g id="stitch-corner-36">
+      <use href="#stitch-shape-36" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-36" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-36)"><use href="#stitch-unit" transform="translate(114.000 1019.000) rotate(42)" /></g>
+    </g>
+    <g id="stitch-bottom-37">
+      <use href="#stitch-shape-37" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-37" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-37)"><use href="#stitch-unit" transform="translate(161.000 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-38">
+      <use href="#stitch-shape-38" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-38" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-38)"><use href="#stitch-unit" transform="translate(211.200 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-39">
+      <use href="#stitch-shape-39" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-39" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-39)"><use href="#stitch-unit" transform="translate(261.400 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-40">
+      <use href="#stitch-shape-40" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-40" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-40)"><use href="#stitch-unit" transform="translate(311.600 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-41">
+      <use href="#stitch-shape-41" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-41" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-41)"><use href="#stitch-unit" transform="translate(361.800 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-42">
+      <use href="#stitch-shape-42" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-42" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-42)"><use href="#stitch-unit" transform="translate(412.000 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-43">
+      <use href="#stitch-shape-43" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-43" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-43)"><use href="#stitch-unit" transform="translate(462.200 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-44">
+      <use href="#stitch-shape-44" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-44" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-44)"><use href="#stitch-unit" transform="translate(512.400 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-45">
+      <use href="#stitch-shape-45" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-45" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-45)"><use href="#stitch-unit" transform="translate(562.600 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-46">
+      <use href="#stitch-shape-46" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-46" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-46)"><use href="#stitch-unit" transform="translate(612.800 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-47">
+      <use href="#stitch-shape-47" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-47" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-47)"><use href="#stitch-unit" transform="translate(663.000 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-48">
+      <use href="#stitch-shape-48" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-48" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-48)"><use href="#stitch-unit" transform="translate(713.200 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-49">
+      <use href="#stitch-shape-49" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-49" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-49)"><use href="#stitch-unit" transform="translate(763.400 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-50">
+      <use href="#stitch-shape-50" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-50" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-50)"><use href="#stitch-unit" transform="translate(813.600 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-51">
+      <use href="#stitch-shape-51" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-51" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-51)"><use href="#stitch-unit" transform="translate(863.800 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-52">
+      <use href="#stitch-shape-52" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-52" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-52)"><use href="#stitch-unit" transform="translate(914.000 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-53">
+      <use href="#stitch-shape-53" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-53" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-53)"><use href="#stitch-unit" transform="translate(964.200 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-54">
+      <use href="#stitch-shape-54" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-54" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-54)"><use href="#stitch-unit" transform="translate(1014.400 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-55">
+      <use href="#stitch-shape-55" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-55" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-55)"><use href="#stitch-unit" transform="translate(1064.600 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-56">
+      <use href="#stitch-shape-56" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-56" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-56)"><use href="#stitch-unit" transform="translate(1114.800 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-57">
+      <use href="#stitch-shape-57" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-57" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-57)"><use href="#stitch-unit" transform="translate(1165.000 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-58">
+      <use href="#stitch-shape-58" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-58" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-58)"><use href="#stitch-unit" transform="translate(1215.200 1030.000) rotate(0)" /></g>
+    </g>
+    <g id="stitch-bottom-59">
+      <use href="#stitch-shape-59" fill="#0C0E0B" stroke="#0C0E0B" stroke-width="1.5" opacity=".62" />
+      <use href="#stitch-shape-59" class="stitch-thread" />
+      <g clip-path="url(#stitch-clip-59)"><use href="#stitch-unit" transform="translate(1265.400 1030.000) rotate(0)" /></g>
+    </g>
+  </g>
+
+</svg>
