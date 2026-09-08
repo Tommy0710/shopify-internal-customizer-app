@@ -100,4 +100,40 @@ describe("verifySessionToken", () => {
       "INVALID_TOKEN",
     );
   });
+
+  it("rejects a token with no exp claim", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const noExp = await new SignJWT({
+      iss: `https://${SHOP}/admin`,
+      dest: `https://${SHOP}`,
+      aud: API_KEY,
+      sub: "42",
+      nbf: now - 10,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .sign(secret);
+    await expectCode(verifySessionToken(noExp, opts), "INVALID_TOKEN");
+  });
+
+  // Regression lock: an empty secret is a valid zero-length HMAC key, so
+  // without the configuration guard anyone could mint their own admin session.
+  it("rejects a token signed with an empty key when no secret is configured", async () => {
+    const emptyKey = new TextEncoder().encode("");
+    const forged = await mintToken({}, emptyKey);
+    await expectCode(
+      verifySessionToken(forged, { ...opts, apiSecret: "" }),
+      "INVALID_TOKEN",
+    );
+  });
+
+  // Regression lock: `audience: ""` makes jose skip the audience check.
+  it("rejects a token minted for another app when no API key is configured", async () => {
+    await expectCode(
+      verifySessionToken(await mintToken({ aud: "some_other_app_key" }), {
+        ...opts,
+        apiKey: "",
+      }),
+      "INVALID_TOKEN",
+    );
+  });
 });

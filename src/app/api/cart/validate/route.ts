@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { calculateServerPrice } from "@/lib/pricing/pricingEngine";
+import { hmacBypassEnabled, verifyShopifyProxySignature } from "@/lib/hmac";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+
+    // This route writes Design/DesignSelection rows. It is reached through the
+    // App Proxy, so it carries the same signature its /api/proxy/* siblings do.
+    if (!hmacBypassEnabled()) {
+      const isValid = verifyShopifyProxySignature(url.searchParams);
+      if (!isValid) {
+        return NextResponse.json({ error: "Invalid HMAC signature" }, { status: 401 });
+      }
+    }
+
     const body = await req.json();
     const { configId, productId, variantId, selections = {}, engravingText, engravingFont, previewUrl } = body;
 

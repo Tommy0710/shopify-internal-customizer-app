@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { Package, RefreshCw, CheckCircle, Clock, ExternalLink, Sparkles, Layers } from "lucide-react";
+import {
+  AdminErrorBanner,
+  adminFetchErrorMessage,
+  adminNetworkErrorMessage,
+} from "@/components/AdminErrorBanner";
 
 interface ProductionJob {
   id: string;
@@ -41,19 +46,25 @@ export default function AdminOrdersPage() {
   const [draftDesigns, setDraftDesigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchJobs = async () => {
     try {
       setLoading(true);
+      setError(null);
       const url = selectedFilter === "ALL" ? "/api/admin/orders" : `/api/admin/orders?status=${selectedFilter}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setJobs(data.jobs || []);
         setDraftDesigns(data.draftDesigns || []);
+      } else {
+        // An empty queue must never stand in for an auth failure.
+        setError(await adminFetchErrorMessage(res, "Không tải được hàng chờ sản xuất"));
       }
     } catch (err) {
       console.error("Error fetching jobs:", err);
+      setError(adminNetworkErrorMessage(err, "Không tải được hàng chờ sản xuất"));
     } finally {
       setLoading(false);
     }
@@ -65,6 +76,7 @@ export default function AdminOrdersPage() {
 
   const updateStatus = async (jobId: string, newStatus: string) => {
     try {
+      setError(null);
       const res = await fetch("/api/admin/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -72,9 +84,13 @@ export default function AdminOrdersPage() {
       });
       if (res.ok) {
         setJobs(jobs.map((j) => (j.id === jobId ? { ...j, status: newStatus as any } : j)));
+      } else {
+        // Otherwise the button appears to do nothing at all.
+        setError(await adminFetchErrorMessage(res, "Không đổi được trạng thái đơn"));
       }
     } catch (err) {
       console.error("Error updating status:", err);
+      setError(adminNetworkErrorMessage(err, "Không đổi được trạng thái đơn"));
     }
   };
 
@@ -96,6 +112,8 @@ export default function AdminOrdersPage() {
           <span>Làm mới danh sách</span>
         </button>
       </div>
+
+      <AdminErrorBanner message={error} />
 
       {/* Filter Tabs */}
       <div className="flex gap-2 border-b border-slate-200 pb-2 text-xs">

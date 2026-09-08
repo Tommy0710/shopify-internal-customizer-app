@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
 import { hmacBypassEnabled } from "@/lib/hmac";
+import { isValidShopDomain } from "@/lib/auth/shopDomain";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -11,6 +12,13 @@ export async function GET(req: NextRequest) {
 
   if (!shop || !code || !hmac) {
     return NextResponse.json({ error: "Missing required OAuth parameters" }, { status: 400 });
+  }
+
+  // `shop` becomes the host of a fetch that carries `client_secret` in its
+  // body. Validate it before that request can be built, and before the HMAC
+  // check, which is skippable via WK_SKIP_HMAC on a developer machine.
+  if (!isValidShopDomain(shop)) {
+    return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
   }
 
   // Validate HMAC

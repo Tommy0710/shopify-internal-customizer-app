@@ -12,11 +12,15 @@ export type AdminGuardResult =
 /**
  * Shops allowed to reach the embedded admin. Empty means deny everything —
  * a missing env var must never widen access.
+ *
+ * Lowercased because the value compared against it comes from `new URL().host`,
+ * which is already lowercase. Without this an operator who types
+ * `WildAndKing-Demo.myshopify.com` locks everyone out with no error to read.
  */
 export function getAllowedShops(): string[] {
   return (process.env.WK_ALLOWED_SHOPS ?? "")
     .split(",")
-    .map((value) => value.trim())
+    .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
 }
 

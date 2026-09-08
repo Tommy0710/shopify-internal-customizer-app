@@ -47,6 +47,17 @@ export async function verifySessionToken(
   token: string | null | undefined,
   opts: VerifyOptions,
 ): Promise<AdminSession> {
+  // Fail closed on a missing configuration. An empty secret is a valid
+  // zero-length HMAC key, so `jose` would happily verify a token anyone can
+  // mint; an empty apiKey makes `jose` skip the audience check entirely.
+  // This must run before any parsing.
+  if (!opts.apiSecret || !opts.apiKey) {
+    throw new SessionTokenError(
+      "INVALID_TOKEN",
+      "Session token verification is not configured",
+    );
+  }
+
   if (!token) {
     throw new SessionTokenError("MISSING_TOKEN", "Missing session token");
   }
@@ -56,7 +67,13 @@ export async function verifySessionToken(
     const verified = await jwtVerify(
       token,
       new TextEncoder().encode(opts.apiSecret),
-      { algorithms: ["HS256"], audience: opts.apiKey, clockTolerance: 5 },
+      {
+        algorithms: ["HS256"],
+        audience: opts.apiKey,
+        clockTolerance: 5,
+        // Without this a token that simply omits `exp` never expires.
+        requiredClaims: ["exp", "nbf", "sub", "dest", "iss", "aud"],
+      },
     );
     payload = verified.payload as Record<string, unknown>;
   } catch {

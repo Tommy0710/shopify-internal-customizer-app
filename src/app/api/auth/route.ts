@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidShopDomain } from "@/lib/auth/shopDomain";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -6,6 +7,12 @@ export async function GET(req: NextRequest) {
 
   if (!shop) {
     return NextResponse.json({ error: "Missing shop parameter" }, { status: 400 });
+  }
+
+  // `shop` is interpolated into the redirect host below. Anything that is not
+  // a real *.myshopify.com domain would send the user off a trusted origin.
+  if (!isValidShopDomain(shop)) {
+    return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
   }
 
   const clientId = process.env.SHOPIFY_API_KEY || "";

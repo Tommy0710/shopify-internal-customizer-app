@@ -4,15 +4,22 @@ import React, { useState, useEffect } from "react";
 import AdminProductsPage from "./admin/products/page";
 import AdminOrdersPage from "./admin/orders/page";
 import { LayoutDashboard, Sliders, PackageCheck, Sparkles, Database, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  AdminErrorBanner,
+  adminFetchErrorMessage,
+  adminNetworkErrorMessage,
+} from "@/components/AdminErrorBanner";
 
 export default function EmbeddedAdminPage() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders">("dashboard");
   const [stats, setStats] = useState({ productsCount: 0, ordersCount: 0, readyOrders: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = async () => {
     try {
       setLoading(true);
+      setError(null);
       const [prodRes, orderRes] = await Promise.all([
         fetch("/api/admin/products"),
         fetch("/api/admin/orders"),
@@ -21,10 +28,13 @@ export default function EmbeddedAdminPage() {
       let pCount = 0;
       let oCount = 0;
       let rCount = 0;
+      const failures: string[] = [];
 
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         pCount = prodData.configs?.length || 0;
+      } else {
+        failures.push(await adminFetchErrorMessage(prodRes, "Không tải được cấu hình sản phẩm"));
       }
 
       if (orderRes.ok) {
@@ -32,11 +42,17 @@ export default function EmbeddedAdminPage() {
         const designs = orderData.designs || [];
         oCount = designs.length;
         rCount = designs.filter((d: any) => d.status === "READY_FOR_PRODUCTION").length;
+      } else {
+        failures.push(await adminFetchErrorMessage(orderRes, "Không tải được đơn sản xuất"));
       }
 
       setStats({ productsCount: pCount, ordersCount: oCount, readyOrders: rCount });
+      // Without this the dashboard reports 0 / 0 / 0 for an auth failure, which
+      // reads exactly like an empty but healthy shop.
+      setError(failures.length > 0 ? `${failures.join(" ")} Các số liệu bên dưới KHÔNG phản ánh dữ liệu thật.` : null);
     } catch (err) {
       console.error("Error loading admin stats:", err);
+      setError(adminNetworkErrorMessage(err, "Không tải được số liệu tổng quan"));
     } finally {
       setLoading(false);
     }
@@ -120,7 +136,10 @@ export default function EmbeddedAdminPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 max-w-6xl w-full mx-auto p-6">
+      <div className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-4">
+        {/* Scoped to the dashboard: the two child tabs render their own. */}
+        {activeTab === "dashboard" && <AdminErrorBanner message={error} />}
+
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             {/* KPI Cards */}

@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { Plus, Check, Trash2, Edit3, Image, Type, Palette, DollarSign, Save, Sparkles, Layers } from "lucide-react";
+import {
+  AdminErrorBanner,
+  adminFetchErrorMessage,
+  adminNetworkErrorMessage,
+} from "@/components/AdminErrorBanner";
 
 interface OptionValue {
   id?: string;
@@ -33,6 +38,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Form State
   const [productId, setProductId] = useState("8129384729101");
@@ -44,13 +50,18 @@ export default function AdminProductsPage() {
   const fetchConfigs = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch("/api/admin/products");
       if (res.ok) {
         const data = await res.json();
         setConfigs(data.configs || []);
+      } else {
+        // An empty table must never stand in for an auth failure.
+        setError(await adminFetchErrorMessage(res, "Không tải được danh sách cấu hình"));
       }
     } catch (err) {
       console.error("Error fetching configs:", err);
+      setError(adminNetworkErrorMessage(err, "Không tải được danh sách cấu hình"));
     } finally {
       setLoading(false);
     }
@@ -70,6 +81,7 @@ export default function AdminProductsPage() {
     try {
       setSaving(true);
       setMessage(null);
+      setError(null);
       const payload = {
         shopifyProductId: productId,
         productTitle,
@@ -88,11 +100,11 @@ export default function AdminProductsPage() {
         setMessage("✅ Đã lưu cấu hình sản phẩm và quy tắc tùy chỉnh thành công!");
         fetchConfigs();
       } else {
-        const err = await res.json();
-        alert("Lỗi: " + err.error);
+        setError(await adminFetchErrorMessage(res, "Không lưu được cấu hình sản phẩm"));
       }
-    } catch (err: any) {
-      alert("Lỗi kết nối: " + err.message);
+    } catch (err) {
+      console.error("Error saving product config:", err);
+      setError(adminNetworkErrorMessage(err, "Không lưu được cấu hình sản phẩm"));
     } finally {
       setSaving(false);
     }
@@ -115,6 +127,8 @@ export default function AdminProductsPage() {
           Thiết lập các nhóm tùy chọn (Chất liệu da, Kiểu khóa, Size, Khắc laser) và giá gốc cho sản phẩm Shopify
         </p>
       </div>
+
+      <AdminErrorBanner message={error} />
 
       {message && (
         <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 font-medium">

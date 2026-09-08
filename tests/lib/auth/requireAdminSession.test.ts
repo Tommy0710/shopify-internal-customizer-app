@@ -89,6 +89,37 @@ describe("requireAdminSession", () => {
     await expect(result.response.json()).resolves.toEqual({ error: "SHOP_NOT_ALLOWED" });
   });
 
+  it("matches the allowlist case-insensitively", async () => {
+    vi.stubEnv("SHOPIFY_API_KEY", API_KEY);
+    vi.stubEnv("SHOPIFY_API_SECRET", API_SECRET);
+    // `new URL().host` is lowercase, so an operator typing mixed case here
+    // used to lock everyone out with no error to read.
+    vi.stubEnv("WK_ALLOWED_SHOPS", " WildAndKing-Demo.MyShopify.com ");
+    const result = await requireAdminSession(
+      request({ authorization: `Bearer ${await mintToken()}` }),
+    );
+    expect(result).toEqual({ session: { shopDomain: SHOP, userId: "42" } });
+  });
+
+  it("returns 401 when SHOPIFY_API_SECRET is unset", async () => {
+    vi.stubEnv("SHOPIFY_API_KEY", API_KEY);
+    vi.stubEnv("SHOPIFY_API_SECRET", "");
+    vi.stubEnv("WK_ALLOWED_SHOPS", SHOP);
+    const forged = await new SignJWT({
+      iss: `https://${SHOP}/admin`,
+      dest: `https://${SHOP}`,
+      aud: API_KEY,
+      sub: "42",
+      nbf: Math.floor(Date.now() / 1000) - 10,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 60)
+      .sign(new TextEncoder().encode(""));
+    const result = await requireAdminSession(request({ authorization: `Bearer ${forged}` }));
+    if (!("response" in result)) throw new Error("expected a response");
+    expect(result.response.status).toBe(401);
+  });
+
   it("denies every shop when WK_ALLOWED_SHOPS is unset", async () => {
     vi.stubEnv("SHOPIFY_API_KEY", API_KEY);
     vi.stubEnv("SHOPIFY_API_SECRET", API_SECRET);
