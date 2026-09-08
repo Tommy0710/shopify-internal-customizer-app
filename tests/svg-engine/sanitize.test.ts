@@ -65,6 +65,48 @@ describe("sanitizeSvgRoot", () => {
     expect(root.querySelector(`[id="local"]`)).not.toBeNull();
     expect(report.removedElements).toContain("use");
   });
+
+  it("blocks embedded tab in javascript: scheme", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><a id="test" href="java\tscript:alert(1)"/></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="test"]')!.hasAttribute("href")).toBe(false);
+    expect(report.removedAttributes).toContain("a@href");
+  });
+
+  it("blocks embedded newline in javascript: scheme", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><a id="test" href="java\nscript:alert(1)"/></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="test"]')!.hasAttribute("href")).toBe(false);
+    expect(report.removedAttributes).toContain("a@href");
+  });
+
+  it("removes animate elements unconditionally", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><a href="#safe"><animate attributeName="href" to="javascript:alert(1)"/></a></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector("animate")).toBeNull();
+    expect(report.removedElements).toContain("animate");
+  });
+
+  it("removes set elements unconditionally", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><rect><set attributeName="onmouseover" to="alert(1)"/></rect></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector("set")).toBeNull();
+    expect(report.removedElements).toContain("set");
+  });
+
+  it("blocks url(javascript:) in any attribute", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><rect id="test" style="fill:url(javascript:alert(1))"/></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="test"]')!.hasAttribute("style")).toBe(false);
+    expect(report.removedAttributes).toContain("rect@style");
+  });
+
+  it("records external URLs from url() references", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><rect style="fill:url(https://cdn.example/texture.webp)"/></svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(report.externalRefs).toContain("https://cdn.example/texture.webp");
+    expect(root.querySelector("rect")!.hasAttribute("style")).toBe(true);
+  });
 });
 
 describe("sanitizeSvgRoot on real mockups", () => {

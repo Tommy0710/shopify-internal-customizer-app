@@ -1298,9 +1298,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Rủi ro nó đóng (spec §13.2 S1):** admin inline SVG chưa lọc vào trang admin. Một `<script>` hay `onload=` trong file upload sẽ chạy trong ngữ cảnh Shopify Admin — nơi có session token. Sanitize **lúc upload** và lưu bản đã lọc, để storefront và admin không bao giờ chạm bản gốc.
 
 **Quy tắc:**
-- Gỡ hẳn: `<script>`, `<foreignObject>`, `<use>` trỏ ra ngoài tài liệu, `<animate>`/`<set>` có `attributeName` là `href`.
-- Gỡ thuộc tính: mọi `on*`, `xlink:href`/`href` mang scheme `javascript:` hoặc `data:text/html`.
-- Ghi nhận (không gỡ) URL ngoài trong `href`/`url()` để caller quyết định — texture hợp lệ chính là URL ngoài.
+- Gỡ hẳn: `<script>`, `<foreignObject>`, **tất cả SMIL** (`<animate>`, `<set>`, `<animateTransform>`, `<animateMotion>` — loại bỏ vô điều kiện, không chỉ khi có `attributeName="href"`), `<use>` trỏ ra ngoài tài liệu.
+- Gỡ thuộc tính: mọi `on*`, `xlink:href`/`href` mang scheme `javascript:` hoặc `data:text/html` **sau khi chuẩn hoá** (gỡ `\t`, `\n`, `\r` theo WHATWG parser).
+- Ghi nhận (không gỡ) URL ngoài trong `href`/`url()` để caller quyết định — texture hợp lệ chính là URL ngoài. Loại bỏ SMIL vô điều kiện vì product chỉ render mockup tĩnh, hai fixture thật không dùng nó; nếu có file mới animate, admin sẽ thấy nó trong report `removedElements`.
 
 - [ ] **Step 1: Viết test thất bại**
 
@@ -1393,16 +1393,52 @@ export interface SanitizeReport {
   externalRefs: string[];
 }
 
-const FORBIDDEN_ELEMENTS = new Set(["script", "foreignobject"]);
+const FORBIDDEN_ELEMENTS = new Set(["script", "foreignobject", "animate", "set", "animatetransform", "animatemotion"]);
 const HREF_ATTRIBUTES = ["href", "xlink:href"];
-const DANGEROUS_SCHEME = /^\s*(javascript:|data:text\/html)/i;
+const DANGEROUS_SCHEME = /^(javascript:|data:text\/html)/i;
+
+function normalizeForSchemeCheck(value: string): string {
+  // Remove ASCII whitespace chars (tab, line-feed, carriage-return) that WHATWG URL parser strips.
+  // This prevents bypass attacks like "java\tscript:" which the browser normalizes to "javascript:".
+  return value.replace(/[\t\n\r]/g, "");
+}
 
 function isEventHandler(name: string): boolean {
   return name.toLowerCase().startsWith("on");
 }
 
 function isExternal(value: string): boolean {
+  // Only http(s) and protocol-relative URLs are recorded as external refs for caller allowlisting.
+  // This is intentionally narrower than the <use> check which blocks all non-fragments,
+  // since <use> can load external SVG with code, while http(s) refs are texture URLs.
   return /^(https?:)?\/\//i.test(value.trim());
+}
+
+function extractUrlReferences(value: string): string[] {
+  const urls: string[] = [];
+
+  // Match url() in three forms:
+  // 1. url("...") - double quoted (unambiguous)
+  let pattern = /url\s*\(\s*"([^"]*)"\s*\)/gi;
+  let m;
+  while ((m = pattern.exec(value)) !== null) {
+    urls.push(m[1]);
+  }
+
+  // 2. url('...') - single quoted (unambiguous)
+  pattern = /url\s*\(\s*'([^']*)'\s*\)/gi;
+  while ((m = pattern.exec(value)) !== null) {
+    urls.push(m[1]);
+  }
+
+  // 3. url(...) - unquoted (matches everything until first closing paren)
+  // Note: unquoted URLs can have function calls like javascript:alert(1)
+  pattern = /url\s*\(\s*([^)]*)\s*\)/gi;
+  while ((m = pattern.exec(value)) !== null) {
+    urls.push(m[1]);
+  }
+
+  return urls;
 }
 
 /**
@@ -1415,6 +1451,9 @@ function isExternal(value: string): boolean {
  *
  * URL ngoài KHÔNG bị gỡ — texture hợp lệ chính là URL ngoài. Chúng được ghi
  * nhận để caller tự quyết định theo allowlist của mình.
+ *
+ * SMIL loại bỏ vô điều kiện vì product chỉ render mockup tĩnh. Nếu file mới
+ * animate, admin sẽ thấy nó trong removedElements.
  */
 export function sanitizeSvgRoot(root: Element): SanitizeReport {
   const report: SanitizeReport = {
@@ -1445,25 +1484,51 @@ export function sanitizeSvgRoot(root: Element): SanitizeReport {
       }
     }
 
-    for (const attribute of element.getAttributeNames()) {
-      if (isEventHandler(attribute)) {
-        report.removedAttributes.push(`${element.localName}@${attribute}`);
-        element.removeAttribute(attribute);
-      }
-    }
-
-    for (const attribute of HREF_ATTRIBUTES) {
+    // Process all attributes
+    const attrNames = [...element.getAttributeNames()];
+    for (const attribute of attrNames) {
       const value = element.getAttribute(attribute);
       if (value === null) continue;
 
-      if (DANGEROUS_SCHEME.test(value)) {
+      // Check for event handlers
+      if (isEventHandler(attribute)) {
         report.removedAttributes.push(`${element.localName}@${attribute}`);
         element.removeAttribute(attribute);
         continue;
       }
 
-      if (isExternal(value)) {
-        report.externalRefs.push(value);
+      // Check href attributes for dangerous schemes
+      if (HREF_ATTRIBUTES.includes(attribute)) {
+        const normalized = normalizeForSchemeCheck(value);
+        if (DANGEROUS_SCHEME.test(normalized)) {
+          report.removedAttributes.push(`${element.localName}@${attribute}`);
+          element.removeAttribute(attribute);
+          continue;
+        }
+
+        if (isExternal(value)) {
+          report.externalRefs.push(value);
+        }
+        continue;
+      }
+
+      // Check for url(...) references in any attribute
+      if (value.includes("url(")) {
+        const urlRefs = extractUrlReferences(value);
+        let hasDangerous = false;
+        for (const urlRef of urlRefs) {
+          const normalized = normalizeForSchemeCheck(urlRef);
+          if (DANGEROUS_SCHEME.test(normalized)) {
+            hasDangerous = true;
+            break;
+          } else if (isExternal(urlRef)) {
+            report.externalRefs.push(urlRef);
+          }
+        }
+        if (hasDangerous) {
+          report.removedAttributes.push(`${element.localName}@${attribute}`);
+          element.removeAttribute(attribute);
+        }
       }
     }
   }
