@@ -109,6 +109,115 @@ describe("sanitizeSvgRoot", () => {
   });
 });
 
+describe("sanitizeSvgRoot leading-whitespace scheme bypasses", () => {
+  // WHATWG URL parser gỡ TOÀN BỘ C0 control và space (U+0000–U+0020) ở hai đầu
+  // trước khi đọc scheme. Bản cũ chỉ gỡ \t \n \r, nên đúng một dấu cách đứng
+  // trước là đủ để `javascript:` sống sót trong khi trình duyệt vẫn chạy nó.
+  it.each([
+    ["space", " "],
+    ["form feed", "\f"],
+    ["vertical tab", "\v"],
+    ["control U+0001", "\u0001"],
+    ["tab", "\t"],
+    ["NUL", "\u0000"],
+    ["newline", "\n"],
+    ["carriage return", "\r"],
+    ["mixed", " \u0001\f"],
+  ])("blocks a javascript: href prefixed with %s", (_label, prefix) => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><a id="t" href="${prefix}javascript:alert(1)"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("href")).toBe(false);
+    expect(report.removedAttributes).toContain("a@href");
+  });
+
+  it("blocks a trailing-whitespace javascript: href", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><a id="t" href="javascript:alert(1) "/></svg>`,
+    );
+    sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("href")).toBe(false);
+  });
+});
+
+describe("sanitizeSvgRoot allowlist", () => {
+  it("removes a style element and reports it", () => {
+    // <style> trong SVG inline KHÔNG bị giới hạn trong SVG — nó áp cho cả trang
+    // admin: @import gọi ra ngoài, selector rò giá trị thuộc tính, *{position:fixed}
+    // phủ UI. Bản cũ trả về báo cáo trắng "không gỡ gì".
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><style>@import url(https://evil.example/x.css);</style></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector("style")).toBeNull();
+    expect(report.removedElements).toContain("style");
+  });
+
+  it.each(["embed", "object", "iframe", "handler", "video", "audio", "metadata", "feImage"])(
+    "removes <%s>, which no blocklist ever named",
+    (name) => {
+      const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><${name}/></svg>`);
+      const report = sanitizeSvgRoot(root);
+      expect(root.querySelector(name)).toBeNull();
+      expect(report.removedElements).toContain(name);
+    },
+  );
+
+  it("reports a removed subtree once, not once per descendant", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><div><span/></div></foreignObject></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(report.removedElements).toEqual(["foreignObject"]);
+  });
+
+  it.each(["xl:href", "src", "data", "poster", "formaction", "xlink:show", "onfocusin"])(
+    "removes the %s attribute, which was never scheme-checked",
+    (attribute) => {
+      const root = parseSvg(
+        `<svg xmlns="http://www.w3.org/2000/svg"><image id="t" ${attribute}="javascript:alert(1)"/></svg>`,
+      );
+      const report = sanitizeSvgRoot(root);
+      expect(root.querySelector('[id="t"]')!.hasAttribute(attribute)).toBe(false);
+      expect(report.removedAttributes).toContain(`image@${attribute}`);
+    },
+  );
+
+  it("removes a mis-cased HREF rather than trusting the exact spelling", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><a id="t" HREF="javascript:alert(1)"/></svg>`,
+    );
+    sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("HREF")).toBe(false);
+  });
+
+  it("keeps a data:image href and drops every other scheme", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg">
+      <image id="dataImage" href="data:image/png;base64,iVBORw0KGgo="/>
+      <image id="insecure" href="http://cdn.example/leather.webp"/>
+      <image id="relative" href="leather.webp"/>
+      <image id="protocolRelative" href="//cdn.example/leather.webp"/>
+      <image id="blobbed" href="blob:https://shop.example/1234"/>
+    </svg>`);
+    sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="dataImage"]')!.hasAttribute("href")).toBe(true);
+    for (const id of ["insecure", "relative", "protocolRelative", "blobbed"]) {
+      expect(root.querySelector(`[id="${id}"]`)!.hasAttribute("href"), id).toBe(false);
+    }
+  });
+
+  it("keeps the whole fixture attribute vocabulary — filters, gradients, aria", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 1 1">
+      <filter id="f" color-interpolation-filters="sRGB"><feTurbulence baseFrequency="0.8" numOctaves="3" seed="7" type="fractalNoise" result="n"/><feColorMatrix in="n" type="saturate" values="0"/><feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="#000" flood-opacity=".4"/></filter>
+      <linearGradient id="grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="8"><stop offset=".3" stop-color="#FFF" stop-opacity=".38"/></linearGradient>
+      <g pointer-events="none" preserveAspectRatio="xMidYMid slice" class="x" style="opacity:.5"><path d="M0 0h1v1H0z" fill="url(#grad)" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".2" fill-opacity=".9" filter="url(#f)"/></g>
+    </svg>`);
+    const report = sanitizeSvgRoot(root);
+    expect(report).toEqual({ removedElements: [], removedAttributes: [], externalRefs: [] });
+  });
+});
+
 describe("sanitizeSvgRoot on real mockups", () => {
   it.each(["angler-fish", "crocodile"])("leaves %s contract-valid and removes nothing", (name) => {
     const source = readFileSync(fileURLToPath(new URL(`../fixtures/svg/${name}.svg`, import.meta.url)), "utf8");

@@ -30,6 +30,14 @@ export function readCssVar(element: Element, name: string): string | null {
   return null;
 }
 
+/**
+ * INTERNAL — không export ra `src/svg-engine/index.ts` và đừng thêm vào đó.
+ *
+ * Hàm này ghi `value` vào thuộc tính `style` nguyên xi, không chuẩn hoá gì.
+ * Đường ghi màu chỉ được phép của engine là `applyStitchColor`, nơi giá trị đã
+ * qua `normalizeHex` trước. Gọi thẳng hàm này từ ngoài là đi vòng qua guide §6
+ * ("giá trị không hợp lệ không bao giờ được ghi vào SVG").
+ */
 export function writeCssVar(element: Element, name: string, value: string): void {
   const kept = declarations(element).filter((declaration) => nameOf(declaration) !== name);
   kept.push(`${name}: ${value}`);

@@ -60,4 +60,46 @@ describe("bakeDesign", () => {
     expect(() => bakeDesign(root, { ...input, stitchHex: "rebeccapurple" })).toThrow(BakeError);
     expect(readCssVar(root, "--wallet-stitches")).not.toBe("rebeccapurple");
   });
+
+  it("leaves the document byte-identical when it throws", () => {
+    // Bản cũ gắn cả hai texture RỒI mới kiểm màu chỉ, nên sau khi ném lỗi
+    // #body-artwork đã mang href — một tài liệu nửa vời mà caller không thấy.
+    const root = parseSvg(realMockup("angler-fish"));
+    const before = root.outerHTML;
+    expect(() => bakeDesign(root, { ...input, stitchHex: "rebeccapurple" })).toThrow(BakeError);
+    expect(root.outerHTML).toBe(before);
+    expect(root.querySelector(`[id="body-artwork"]`)!.hasAttribute("href")).toBe(false);
+  });
+
+  it.each(["", "   "])("refuses a blank texture URL instead of hiding the layer (%j)", (blank) => {
+    // applyTexture coi chuỗi rỗng là TÍN HIỆU GỠ ảnh: bản cũ bake thành công và
+    // sinh ra hồ sơ lưu trữ có lớp thân ví vô hình.
+    const root = parseSvg(realMockup("crocodile"));
+    const before = root.outerHTML;
+    expect(() => bakeDesign(root, { ...input, bodyTextureUrl: blank })).toThrow(BakeError);
+    expect(root.outerHTML).toBe(before);
+  });
+
+  it("refuses a texture URL whose scheme the validator would reject", () => {
+    const root = parseSvg(realMockup("crocodile"));
+    expect(() =>
+      bakeDesign(root, { ...input, animalTextureUrl: "javascript:alert(1)" }),
+    ).toThrow(BakeError);
+    expect(root.querySelector(`[id="body-artwork"]`)!.hasAttribute("href")).toBe(false);
+  });
+
+  it("refuses a mockup whose #stitches ignores the colour variable", () => {
+    // "warning" không phá `valid` là đúng cho cổng PREVIEW. Với cổng LƯU TRỮ
+    // thì sai: màu khách chọn rơi vào một custom property không ai đọc, chỉ vẫn
+    // đen, và đơn hàng lưu vĩnh viễn sai màu (spec §6.6).
+    const source = realMockup("crocodile").replace(
+      'fill="var(--wallet-stitches)"',
+      'fill="#000000"',
+    );
+    const root = parseSvg(source);
+    expect(root.querySelector(`[id="stitches"]`)!.getAttribute("fill")).toBe("#000000");
+    expect(validateSvgContract(root).valid).toBe(true);
+    expect(validateSvgContract(root).checks.some((check) => check.status === "warning")).toBe(true);
+    expect(() => bakeDesign(root, input)).toThrow(BakeError);
+  });
 });

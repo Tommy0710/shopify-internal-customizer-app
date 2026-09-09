@@ -1,4 +1,5 @@
 export {
+  ARTWORK_CLIP_BINDINGS,
   ARTWORK_TARGET_IDS,
   CONTRACT_VERSION,
   LEGACY_ID_PREFIX,
@@ -10,8 +11,14 @@ export {
 } from "./contract";
 
 export { normalizeHex } from "./colors";
-export { readCssVar, writeCssVar } from "./css";
+// `writeCssVar` cố tình KHÔNG được export: nó ghi chuỗi tuỳ ý thẳng vào thuộc
+// tính `style`. Đường ghi màu duy nhất được phép là `applyStitchColor`, nơi giá
+// trị đi qua `normalizeHex` — guide §6: giá trị không hợp lệ KHÔNG BAO GIỜ được
+// ghi vào SVG.
+export { readCssVar } from "./css";
 export {
+  REFERENCE_CHECK_ID,
+  SAFETY_CHECK_ID,
   validateSvgContract,
   type CheckStatus,
   type ContractCheck,

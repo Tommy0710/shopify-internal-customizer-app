@@ -35,6 +35,22 @@ export const REQUIRED_ELEMENTS: ReadonlyArray<{
   { id: "stitches", element: "g" },
 ] as const;
 
+/**
+ * Guide §8: "mỗi artwork target tham chiếu đúng `clipPath` tương ứng".
+ *
+ * Đây là ràng buộc SỐNG CÒN chứ không phải trang trí — guide §13 xếp "chỉ gán
+ * ID nhưng không dùng clipPath" là lỗi đầu bảng: ảnh biến thành hình chữ nhật
+ * phủ toàn canvas. Ngược lại, `clip-path` trỏ vào ID không tồn tại thì phần tử
+ * KHÔNG render gì cả — artwork biến mất im lặng.
+ */
+export const ARTWORK_CLIP_BINDINGS: ReadonlyArray<{
+  readonly artworkId: string;
+  readonly clipId: string;
+}> = [
+  { artworkId: "body-artwork", clipId: "wallet-body-clip" },
+  { artworkId: "animal-artwork", clipId: "animal-clip" },
+] as const;
+
 export const ARTWORK_TARGET_IDS = {
   body: "body-artwork",
   animal: "animal-artwork",

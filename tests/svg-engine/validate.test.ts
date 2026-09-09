@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateSvgContract } from "@/svg-engine/validate";
+import { sanitizeSvgRoot } from "@/svg-engine/sanitize";
 import { parseSvg } from "../helpers/svgDom";
 
 function build(options: {
@@ -131,5 +132,175 @@ describe("validateSvgContract", () => {
   it("returns a null viewBox rather than throwing when the attribute is absent", () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview"><g id="stitches" fill="var(--wallet-stitches)"></g></svg>`;
     expect(validateSvgContract(parseSvg(svg)).viewBox).toBeNull();
+  });
+});
+
+/**
+ * Guide §8 liệt kê tám điều kiện; bốn điều kiện cuối (liên kết clipPath, tham
+ * chiếu phân giải được, không script/handler/tài nguyên ngoài không tin cậy)
+ * trước đây không được cài đặt, nên tài liệu dưới đây từng trả `valid: true`.
+ */
+describe("validateSvgContract — guide §8 conditions beyond the id table", () => {
+  function contract(body: string, rootAttributes = ""): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview" ${rootAttributes}>${body}</svg>`;
+  }
+
+  const SOUND_BODY = `
+    <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
+    <path id="animal-shape" d="M2 2h4v4H2z"/>
+    <clipPath id="wallet-body-clip"><use href="#wallet-body-shape"/></clipPath>
+    <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+    <image id="body-artwork" clip-path="url(#wallet-body-clip)"/>
+    <image id="animal-artwork" clip-path="url(#animal-clip)"/>
+    <g id="stitches" fill="var(--wallet-stitches)"></g>`;
+
+  it("rejects the whole composite the guide warns about", () => {
+    const report = validateSvgContract(
+      parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview" onload="steal()">
+        <script>alert(1)</script>
+        <path id="wallet-body-shape" d="M0 0h1v1H0z"/>
+        <path id="animal-shape" d="M0 0h1v1H0z"/>
+        <clipPath id="wallet-body-clip"/>
+        <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+        <image id="body-artwork"/>
+        <image id="animal-artwork" clip-path="url(#does-not-exist)"/>
+        <g id="stitches" fill="var(--wallet-stitches)"></g>
+      </svg>`),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(statusOf(report, "references")).toBe("dangling-ref");
+    expect(statusOf(report, "body-artwork/clip-path")).toBe("unlinked");
+    expect(statusOf(report, "animal-artwork/clip-path")).toBe("unlinked");
+    expect(statusOf(report, "wallet-body-clip/contents")).toBe("empty");
+  });
+
+  it("rejects an artwork target with no clip-path at all", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(` clip-path="url(#wallet-body-clip)"`, ""))),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "body-artwork/clip-path")).toBe("unlinked");
+    expect(statusOf(report, "animal-artwork/clip-path")).toBe("ok");
+  });
+
+  it("rejects an artwork target clipped by the wrong clipPath", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`url(#animal-clip)"/>`, `url(#wallet-body-clip)"/>`))),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "animal-artwork/clip-path")).toBe("unlinked");
+  });
+
+  it("rejects a clip-path that points at an id which does not exist", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`url(#animal-clip)`, `url(#nope)`))),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "references")).toBe("dangling-ref");
+  });
+
+  it("rejects an href that points at an id which does not exist", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`href="#animal-shape"`, `href="#ghost"`))),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "references")).toBe("dangling-ref");
+  });
+
+  it("rejects an empty clipPath, which clips the artwork away entirely", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`<clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>`, `<clipPath id="animal-clip"/>`))),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "animal-clip/contents")).toBe("empty");
+  });
+
+  it("rejects a surviving <script> element", () => {
+    const report = validateSvgContract(parseSvg(contract(`<script>alert(1)</script>${SOUND_BODY}`)));
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "safety")).toBe("unsafe");
+  });
+
+  it("rejects a surviving <style> element", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<style>@import url(https://evil.example/x.css);</style>${SOUND_BODY}`)),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "safety")).toBe("unsafe");
+  });
+
+  it("rejects a surviving inline event handler", () => {
+    const report = validateSvgContract(parseSvg(contract(SOUND_BODY, `onload="steal()"`)));
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "safety")).toBe("unsafe");
+  });
+
+  it("rejects a surviving javascript: URL, leading space and all", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<a href=" javascript:alert(1)"/>${SOUND_BODY}`)),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "safety")).toBe("unsafe");
+  });
+
+  it("accepts an https texture URL — a baked design carries two of them", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`<image id="body-artwork"`, `<image id="body-artwork" href="https://cdn.example/leather.webp"`))),
+    );
+    expect(report.valid).toBe(true);
+    expect(statusOf(report, "safety")).toBe("ok");
+  });
+
+  it("catches a nested element that reuses the root id", () => {
+    // querySelectorAll không bao giờ trả về chính root, nên bản cũ đếm hụt và
+    // <g id="wallet-preview"> lồng bên trong lọt qua như thể không trùng.
+    const report = validateSvgContract(
+      parseSvg(contract(`<g id="wallet-preview"></g>${SOUND_BODY}`)),
+    );
+    expect(report.valid).toBe(false);
+    expect(statusOf(report, "wallet-preview")).toBe("duplicate");
+  });
+});
+
+describe("sanitize then validate", () => {
+  it("catches a clipPath the sanitizer legitimately gutted", () => {
+    // <use> trỏ sang tài liệu khác bị gỡ đúng luật, nhưng nó là con DUY NHẤT
+    // của clipPath — còn lại một clipPath rỗng, cắt sạch artwork. Test của
+    // sanitize không bao giờ validate lại, test của validate không bao giờ
+    // thấy tài liệu đã sanitize, nên không bên nào bắt được.
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
+      <path id="animal-shape" d="M2 2h4v4H2z"/>
+      <clipPath id="wallet-body-clip"><use href="https://evil.example/x.svg#a"/></clipPath>
+      <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+      <image id="body-artwork" clip-path="url(#wallet-body-clip)"/>
+      <image id="animal-artwork" clip-path="url(#animal-clip)"/>
+      <g id="stitches" fill="var(--wallet-stitches)"></g>
+    </svg>`);
+
+    expect(validateSvgContract(root).valid).toBe(true);
+
+    const report = sanitizeSvgRoot(root);
+    expect(report.removedElements).toContain("use");
+
+    const after = validateSvgContract(root);
+    expect(after.valid).toBe(false);
+    expect(statusOf(after, "wallet-body-clip/contents")).toBe("empty");
+  });
+
+  it("leaves a clean document valid before and after sanitizing", () => {
+    const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
+      <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
+      <path id="animal-shape" d="M2 2h4v4H2z"/>
+      <clipPath id="wallet-body-clip"><use href="#wallet-body-shape"/></clipPath>
+      <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+      <image id="body-artwork" clip-path="url(#wallet-body-clip)"/>
+      <image id="animal-artwork" clip-path="url(#animal-clip)"/>
+      <g id="stitches" fill="var(--wallet-stitches)"></g>
+    </svg>`);
+    expect(validateSvgContract(root).valid).toBe(true);
+    expect(sanitizeSvgRoot(root).removedElements).toEqual([]);
+    expect(validateSvgContract(root).valid).toBe(true);
   });
 });
