@@ -1105,6 +1105,40 @@ Build hoặc type-check thành công **không thay thế** kiểm tra trực qua
 
 ---
 
+## 15b. ⛔ CHẶN P1b — hai lỗ hổng sanitizer đã biết, chưa vá
+
+Phát hiện ở vòng re-review cuối của P1a, xác minh bằng thực thi, **cố ý hoãn** vì hôm nay chưa có
+consumer nào inline markup đã lưu. **Phase nào dựng consumer đó phải vá trước khi dựng.**
+
+### K — node comment không được sanitize (Critical, XSS thật)
+
+`src/svg-engine/sanitize.ts` chỉ duyệt phần tử; node comment đi qua nguyên văn. Payload:
+
+```
+<svg id="wallet-preview"><!-- --!><script>alert(document.domain)</script><!-- -->…</svg>
+```
+
+Kết quả đo được: payload còn nguyên trong output, `sanitizeSvgRoot` trả `{removedElements:[],
+removedAttributes:[],externalRefs:[]}`, `validateSvgContract` trả `valid: true`.
+
+Khi markup này được inline vào trang Shopify Admin, tokenizer HTML ở trạng thái *comment-end-bang*
+coi `--!>` là kết thúc comment, và `<script>` ngay sau đó chạy trong origin đang giữ session token.
+
+**Vá:** gỡ node comment và processing-instruction trong `visit()`, và cho `checkSafety` từ chối chúng.
+Kèm test rằng `checkSafety` tương đương "sanitizer sẽ không gỡ gì" — khẳng định này hiện **sai** với
+node không phải phần tử.
+
+### K4 — cổng `url(` phân biệt hoa thường (Important)
+
+`sanitize.ts:102` và `validate.ts:99` đều dùng `value.includes("url(")`, trong khi tên hàm CSS
+**không** phân biệt hoa thường. Hệ quả đo được với `style="background-image:URL(http://evil…)"`:
+thuộc tính được giữ, không vào `externalRefs` (nên allowlist host của caller không bao giờ thấy nó),
+và `clip-path="URL(#khong-ton-tai)"` không bị bắt là dangling reference.
+
+**Vá:** lowercase giá trị trước khi qua cổng, hoặc bỏ cổng và để regex (vốn đã có cờ `i`) tự quyết.
+
+---
+
 ## 16. Điểm còn mở (không chặn triển khai)
 
 1. **Số lượng leather thực tế** → quyết định bộ sinh tạo 1 hay N product. Trả lời lúc nào cũng được; admin hiện con số trước khi generate.
