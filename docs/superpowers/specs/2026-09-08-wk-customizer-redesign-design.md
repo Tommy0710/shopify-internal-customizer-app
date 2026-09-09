@@ -1105,7 +1105,7 @@ Build hoặc type-check thành công **không thay thế** kiểm tra trực qua
 
 ---
 
-## 15b. ⛔ CHẶN P1b — hai lỗ hổng sanitizer đã biết, chưa vá
+## 15b. ✅ ĐÃ VÁ — hai lỗ hổng sanitizer (từng chặn P1b)
 
 Phát hiện ở vòng re-review cuối của P1a, xác minh bằng thực thi, **cố ý hoãn** vì hôm nay chưa có
 consumer nào inline markup đã lưu. **Phase nào dựng consumer đó phải vá trước khi dựng.**
@@ -1128,6 +1128,15 @@ coi `--!>` là kết thúc comment, và `<script>` ngay sau đó chạy trong or
 Kèm test rằng `checkSafety` tương đương "sanitizer sẽ không gỡ gì" — khẳng định này hiện **sai** với
 node không phải phần tử.
 
+**ĐÃ VÁ.** `visit()` duyệt `childNodes` và gỡ comment + processing instruction, ghi vào
+`SanitizeReport.removedElements` dưới `nodeName` chuẩn của DOM (`#comment`,
+`#processing-instruction`; `#` không phải ký tự mở đầu hợp lệ của tên XML nên không đụng tên phần
+tử nào). `checkSafety` từ chối đúng hai loại node đó, nên khẳng định "an toàn = sanitizer sẽ không
+gỡ gì" đúng cả với node không phải phần tử. Quy tắc nằm ở `unsafeNodeName` trong `policy.ts` — một
+nguồn duy nhất cho cả hai cổng. CDATA cố tình KHÔNG bị gỡ: dữ liệu của một node CDATA không bao giờ
+chứa được `]]>`, nên nó không thoát ra được ở cả parser XML lẫn HTML. linkedom không dựng được node
+PI, nên nhánh PI chỉ test được ở tầng `policy` (browser DOMParser thì có).
+
 ### K4 — cổng `url(` phân biệt hoa thường (Important)
 
 `sanitize.ts:102` và `validate.ts:99` đều dùng `value.includes("url(")`, trong khi tên hàm CSS
@@ -1136,6 +1145,14 @@ thuộc tính được giữ, không vào `externalRefs` (nên allowlist host c�
 và `clip-path="URL(#khong-ton-tai)"` không bị bắt là dangling reference.
 
 **Vá:** lowercase giá trị trước khi qua cổng, hoặc bỏ cổng và để regex (vốn đã có cờ `i`) tự quyết.
+
+**ĐÃ VÁ.** Cả hai cổng viết tay bị xoá; `extractUrlReferences` trong `policy.ts` là định nghĩa duy
+nhất và mảng rỗng chính là câu trả lời "không có url() nào". Đo được thêm một biến thể mà cách
+"lowercase rồi so khớp" vẫn trượt: `url (` có khoảng trắng — hợp lệ với CSS, không khớp
+`includes("url(")`. Ngoài ra `extractUrlReferences` giải mã escape của CSS trước khi so khớp:
+`style="filter:\75 rl(http://evil.example/x.svg#f)"` cũng đo được là fetch thật mà `externalRefs`
+không bao giờ thấy. Giá trị `href` KHÔNG đi qua bước giải mã đó — nó không phải CSS, `\` trong nó
+là một ký tự thật.
 
 ---
 

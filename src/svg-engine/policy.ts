@@ -258,6 +258,41 @@ export const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
   "z",
 ]);
 
+/** Hằng số `Node.*_NODE`, viết tay vì engine không được phụ thuộc vào global DOM nào. */
+const PROCESSING_INSTRUCTION_NODE = 7;
+const COMMENT_NODE = 8;
+
+/**
+ * Node KHÔNG phải phần tử mà cả hai cổng coi là không an toàn, kèm tên dùng để
+ * báo cáo. Trả `null` nghĩa là node được giữ (phần tử, text).
+ *
+ * Vì sao comment là lỗ hổng thật: markup đã lưu sẽ được inline vào trang HTML
+ * của Shopify Admin, và tokenizer HTML kết thúc comment ở `--!>` (trạng thái
+ * *comment-end-bang*) trong khi parser XML thì không. Chuỗi
+ * `<!-- --!><script>…</script><!-- -->` là MỘT node comment với XML — nên
+ * sanitize duyệt-theo-phần-tử không thấy gì để gỡ — nhưng với HTML nó là một
+ * comment rồi một `<script>` THẬT trong namespace SVG, chạy trong origin đang
+ * giữ session token.
+ *
+ * Processing instruction cùng hình dạng: HTML không có PI, `<?x ?>` bị parse
+ * thành *bogus comment* kết thúc ở dấu `>` ĐẦU TIÊN, nên `<?x ><script>…` cũng
+ * mở ra một phần tử thật.
+ *
+ * CDATA cố tình KHÔNG nằm đây: dữ liệu của một node CDATA không bao giờ chứa
+ * được `]]>` (đó chính là điều kiện để nó là một node), và trong HTML nội dung
+ * foreign cũng đóng CDATA ở đúng `]]>` — không có cách nào thoát ra. Nó là
+ * text, và text được serializer escape.
+ *
+ * Tên trả về là `nodeName` chuẩn của DOM cho hai loại node này. `#` không phải
+ * ký tự mở đầu hợp lệ của tên XML, nên chúng không bao giờ đụng tên một phần
+ * tử trong `SanitizeReport.removedElements`.
+ */
+export function unsafeNodeName(node: { nodeType: number }): string | null {
+  if (node.nodeType === COMMENT_NODE) return "#comment";
+  if (node.nodeType === PROCESSING_INSTRUCTION_NODE) return "#processing-instruction";
+  return null;
+}
+
 /** Thuộc tính mang URL trực tiếp, không qua `url(...)`. */
 export const HREF_ATTRIBUTES: readonly string[] = ["href", "xlink:href"];
 
@@ -298,17 +333,59 @@ export function isExternalUrlValue(value: string): boolean {
 }
 
 /**
+ * Giải mã escape của CSS (`\\75 rl(` → `url(`, `\\2f` → `/`) trước khi đi tìm
+ * `url(...)`.
+ *
+ * Vì sao cần: giá trị của `style` và của mọi thuộc tính trình bày được TRÌNH
+ * DUYỆT đọc bằng bộ tokenize CSS, và ở đó `\\75 rl` là ident `url` chứ không
+ * phải sáu ký tự. `style="filter:\\75 rl(http://evil.example/x.svg#f)"` vì thế
+ * vẫn nạp tài nguyên ngoài trong khi một cổng so khớp chuỗi thô không thấy gì —
+ * cùng hình dạng với lỗi phân biệt hoa thường, chỉ đổi cách viết.
+ *
+ * Chỉ dùng cho nhánh `url(...)`; giá trị `href` KHÔNG đi qua đây vì nó không
+ * phải CSS, dấu `\\` trong đó là một ký tự thật.
+ *
+ * Đây không phải bộ tokenize CSS đầy đủ và không cần phải là: nó chỉ mở rộng
+ * tập giá trị bị soi, không bao giờ thu hẹp — một chuỗi không có `\\` đi qua
+ * nguyên vẹn.
+ */
+function decodeCssEscapes(value: string): string {
+  if (!value.includes("\\")) return value;
+  return value.replace(
+    /\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f])/g,
+    (_match, hex: string | undefined, literal: string | undefined) => {
+      if (hex === undefined) return literal ?? "";
+      const codePoint = Number.parseInt(hex, 16);
+      // 0 và các code point ngoài dải Unicode được CSS thay bằng U+FFFD.
+      if (codePoint === 0 || codePoint > 0x10ffff) return "\uFFFD";
+      return String.fromCodePoint(codePoint);
+    },
+  );
+}
+
+/**
  * Rút mọi tham chiếu `url(...)` trong một giá trị thuộc tính.
  *
- * Nhánh có dấu nháy đứng trước nên giá trị trả về không dính dấu nháy; nhánh
- * cuối dừng ở `)` đầu tiên, nên `url(javascript:alert(1))` trả
+ * ĐÂY LÀ CỔNG DUY NHẤT. Cả `sanitizeSvgRoot` lẫn `validateSvgContract` từng
+ * đứng trước hàm này một cổng viết tay `value.includes("url(")` — phân biệt hoa
+ * thường và không cho phép khoảng trắng — nên `URL(`, `Url(` và `url (` đi
+ * thẳng qua cả hai: thuộc tính được giữ, URL ngoài không vào `externalRefs`
+ * (allowlist host của caller không bao giờ thấy nó), và `URL(#khong-ton-tai)`
+ * không bị bắt là dangling. Hai bản sao của cùng một quy tắc là cách con bug
+ * đó sống sót, nên giờ không còn bản sao nào: caller gọi thẳng hàm này và một
+ * mảng rỗng chính là câu trả lời "không có url() nào ở đây".
+ *
+ * Tên hàm CSS không phân biệt hoa thường (cờ `i`) và cho phép khoảng trắng
+ * trước `(`. Nhánh có dấu nháy đứng trước nên giá trị trả về không dính dấu
+ * nháy; nhánh cuối dừng ở `)` đầu tiên, nên `url(javascript:alert(1))` trả
  * `javascript:alert(1` — vẫn trượt kiểm tra scheme, đúng ý đồ.
  */
 export function extractUrlReferences(value: string): string[] {
   const pattern = /url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi;
   const urls: string[] = [];
   let match: RegExpExecArray | null;
-  while ((match = pattern.exec(value)) !== null) {
+  const decoded = decodeCssEscapes(value);
+  while ((match = pattern.exec(decoded)) !== null) {
     urls.push(match[1] ?? match[2] ?? match[3] ?? "");
   }
   return urls;

@@ -228,3 +228,114 @@ describe("sanitizeSvgRoot on real mockups", () => {
     expect(validateSvgContract(root).valid).toBe(true);
   });
 });
+
+describe("sanitizeSvgRoot non-element nodes", () => {
+  // Bản cũ chỉ duyệt `element.children`, nên MỌI node không phải phần tử đi qua
+  // nguyên văn với báo cáo trắng. Parser XML coi cả chuỗi dưới đây là MỘT
+  // comment; tokenizer HTML thì kết thúc comment ở `--!>` (trạng thái
+  // comment-end-bang) rồi mở một `<script>` THẬT trong namespace SVG — chạy
+  // trong origin Shopify Admin đang giữ session token.
+  const PAYLOAD = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview"><!-- --!><script>alert(document.domain)</script><!-- --><path id="animal-shape" d="M0 0h1v1H0z"/><g id="stitches" fill="var(--wallet-stitches)"/></svg>`;
+
+  it("removes the comment-end-bang payload and names what it removed", () => {
+    const root = parseSvg(PAYLOAD);
+    const report = sanitizeSvgRoot(root);
+
+    const serialized = root.outerHTML;
+    expect(serialized).not.toContain("alert(document.domain)");
+    expect(serialized).not.toContain("--!>");
+    expect(serialized).not.toContain("<!--");
+    expect(report.removedElements).toEqual(["#comment"]);
+    // Cái còn lại phải nguyên vẹn: gỡ comment không được đụng nội dung thật.
+    expect(root.querySelector(`[id="animal-shape"]`)).not.toBeNull();
+    expect(root.querySelector(`[id="stitches"]`)).not.toBeNull();
+  });
+
+  it("removes a comment nested deep in the tree, not just at the root", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><g id="a"><g id="b"><!-- --!><script>alert(1)</script><!-- --></g></g></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.outerHTML).not.toContain("<!--");
+    expect(report.removedElements).toEqual(["#comment"]);
+  });
+
+  it("counts a comment inside a removed subtree once, as the subtree", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><!--x--></foreignObject></svg>`,
+    );
+    expect(sanitizeSvgRoot(root).removedElements).toEqual(["foreignObject"]);
+  });
+
+  it("keeps text content — only comments and processing instructions go", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><title>Angler fish<!--x--></title></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector("title")!.textContent).toBe("Angler fish");
+    expect(report.removedElements).toEqual(["#comment"]);
+  });
+});
+
+describe("sanitizeSvgRoot url( is case-insensitive", () => {
+  // Tên hàm CSS không phân biệt hoa thường, và `extractUrlReferences` vốn đã có
+  // cờ `i` — nhưng hai cổng viết tay `value.includes("url(")` đứng trước nó thì
+  // không, nên `URL(` đi thẳng qua cả sanitize lẫn validate.
+  const SPELLINGS = ["url", "URL", "Url", "uRl", "url ", "URL\t"];
+
+  it.each(SPELLINGS)("strips a dangerous scheme behind %j(", (spelling) => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" style="fill:${spelling}(javascript:alert(1))"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("style")).toBe(false);
+    expect(report.removedAttributes).toContain("rect@style");
+  });
+
+  it.each(SPELLINGS)("strips an http: beacon behind %j(", (spelling) => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" style="background-image:${spelling}(http://evil.example/beacon.png)"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("style")).toBe(false);
+    expect(report.removedAttributes).toContain("rect@style");
+  });
+
+  it.each(SPELLINGS)("records an external https texture behind %j( too", (spelling) => {
+    // Nếu URL ngoài không vào `externalRefs`, allowlist host của caller — cơ
+    // chế tin-cậy-host DUY NHẤT — không bao giờ nhìn thấy nó.
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" style="fill:${spelling}(https://cdn.example/texture.webp)"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(report.externalRefs).toEqual(["https://cdn.example/texture.webp"]);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("style")).toBe(true);
+  });
+
+  it("sees through a CSS-escaped url( as the browser's CSS tokenizer does", () => {
+    // `\75 rl` là ident `url` với bộ tokenize CSS, nên trình duyệt VẪN fetch —
+    // cùng lỗ hổng như `URL(`, chỉ đổi cách viết.
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" style="filter:\\75 rl(http://evil.example/x.svg#f)"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(root.querySelector('[id="t"]')!.hasAttribute("style")).toBe(false);
+    expect(report.removedAttributes).toContain("rect@style");
+  });
+
+  it("records a CSS-escaped external texture instead of hiding it", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" style="fill:\\75 rl(https://cdn.example/texture.webp)"/></svg>`,
+    );
+    expect(sanitizeSvgRoot(root).externalRefs).toEqual(["https://cdn.example/texture.webp"]);
+  });
+
+  it("leaves a backslash-free value untouched — decoding only widens the net", () => {
+    const root = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="t" fill="url(#grad)" font-family="Helvetica Neue"/><linearGradient id="grad"/></svg>`,
+    );
+    const report = sanitizeSvgRoot(root);
+    expect(report).toEqual({ removedElements: [], removedAttributes: [], externalRefs: [] });
+    expect(root.querySelector('[id="t"]')!.getAttribute("fill")).toBe("url(#grad)");
+  });
+});

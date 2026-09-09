@@ -6,10 +6,20 @@ import {
   isAllowedUrlValue,
   isExternalUrlValue,
   normalizeUrlForSchemeCheck,
+  unsafeNodeName,
 } from "./policy";
 
 export interface SanitizeReport {
-  /** localName của các phần tử đã bị gỡ */
+  /**
+   * localName của các phần tử đã bị gỡ, cộng `nodeName` của các node không phải
+   * phần tử đã bị gỡ (`#comment`, `#processing-instruction`).
+   *
+   * Chúng nằm chung một trường có chủ đích: câu hỏi mà mọi caller thực sự hỏi
+   * là "sanitize có gỡ gì không", và đó phải là một câu hỏi trả lời được bằng
+   * hai trường này — đúng bằng khẳng định mà `checkSafety` trong `./validate`
+   * mirror. Một trường thứ ba sẽ là thứ mà một caller quên kiểm tra. `#` không
+   * phải ký tự mở đầu hợp lệ của tên XML nên không có va chạm.
+   */
   removedElements: string[];
   /** "localName@attributeName" của các thuộc tính đã bị gỡ */
   removedAttributes: string[];
@@ -69,6 +79,17 @@ function visit(element: Element, report: SanitizeReport): void {
 
   sanitizeAttributes(element, report);
 
+  // Node không phải phần tử. `element.children` bỏ qua chúng hoàn toàn, nên
+  // trước bản vá này một node comment đi qua NGUYÊN VĂN — và một comment chứa
+  // `--!>` mở ra một `<script>` thật khi markup đã lưu được inline vào trang
+  // HTML của Admin (xem `unsafeNodeName` trong `./policy`).
+  for (const child of Array.from(element.childNodes)) {
+    const nodeName = unsafeNodeName(child);
+    if (nodeName === null) continue;
+    report.removedElements.push(nodeName);
+    element.removeChild(child);
+  }
+
   for (const child of Array.from(element.children) as Element[]) {
     visit(child, report);
   }
@@ -99,8 +120,10 @@ function sanitizeAttributes(element: Element, report: SanitizeReport): void {
       continue;
     }
 
-    if (!value.includes("url(")) continue;
-
+    // KHÔNG có cổng `value.includes("url(")` ở đây. Cổng viết tay đó phân biệt
+    // hoa thường trong khi tên hàm CSS thì không, nên `URL(`, `Url(` và `url (`
+    // đi thẳng qua nó; `extractUrlReferences` (cờ `i`, cho phép khoảng trắng)
+    // là định nghĩa duy nhất, và mảng rỗng chính là "không có url() nào".
     const references = extractUrlReferences(value);
     if (references.some((reference) => !isAllowedUrlValue(reference))) {
       report.removedAttributes.push(`${element.localName}@${attribute}`);

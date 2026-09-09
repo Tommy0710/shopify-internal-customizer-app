@@ -14,6 +14,7 @@ import {
   extractUrlReferences,
   fragmentIdOf,
   isAllowedUrlValue,
+  unsafeNodeName,
 } from "./policy";
 
 export type CheckStatus =
@@ -96,10 +97,12 @@ function urlValuesOf(element: Element): Array<{ attribute: string; value: string
       values.push({ attribute, value });
       continue;
     }
-    if (value.includes("url(")) {
-      for (const reference of extractUrlReferences(value)) {
-        values.push({ attribute, value: reference });
-      }
+    // Không có cổng `value.includes("url(")` đứng trước: nó phân biệt hoa
+    // thường trong khi tên hàm CSS thì không, nên `URL(#khong-ton-tai)` từng
+    // qua được cả check này lẫn `checkSafety`. `extractUrlReferences` là định
+    // nghĩa duy nhất, dùng chung với `sanitizeSvgRoot`.
+    for (const reference of extractUrlReferences(value)) {
+      values.push({ attribute, value: reference });
     }
   }
   return values;
@@ -148,7 +151,10 @@ function checkReferences(root: Element, elements: Element[]): ContractCheck {
  * Đây là CỔNG THỨ HAI, độc lập với sanitize: nếu sanitize có lỗ thì tài liệu
  * vẫn phải bị chặn ở đây trước khi hiển thị hoặc bake. Cả hai dùng chung
  * allowlist trong `./policy`, nên đúng một định nghĩa "an toàn" tồn tại — và
- * check này tương đương câu "sanitize sẽ không gỡ gì khỏi tài liệu này".
+ * check này tương đương câu "sanitize sẽ không gỡ gì khỏi tài liệu này". Sự
+ * tương đương đó phải đúng cho CẢ node không phải phần tử, nếu không nó chỉ là
+ * một khẩu hiệu: comment và processing instruction bị sanitize gỡ, nên chúng
+ * cũng phải bị từ chối ở đây.
  *
  * URL `https:` ngoài KHÔNG bị coi là không tin cậy ở tầng này: texture da hợp
  * lệ là URL ngoài, và bản đã bake luôn chứa hai cái. Việc lọc theo host là
@@ -161,6 +167,17 @@ function checkSafety(elements: Element[]): ContractCheck {
     if (!ALLOWED_ELEMENTS.has(element.localName.toLowerCase())) {
       offenders.push(`<${element.localName}>`);
       continue;
+    }
+    // Node không phải phần tử. `elements` chỉ chứa phần tử, nhưng mọi node khác
+    // trong cây là con trực tiếp của một phần tử nào đó trong danh sách, nên
+    // vòng này phủ hết. Thiếu nó, khẳng định ở đầu hàm — "an toàn nghĩa là
+    // sanitize sẽ không gỡ gì" — sai với đúng loại node nguy hiểm nhất: một
+    // comment chứa `--!>` mở ra `<script>` khi markup được inline vào HTML.
+    for (const child of Array.from(element.childNodes)) {
+      const nodeName = unsafeNodeName(child);
+      if (nodeName !== null) {
+        offenders.push(`${nodeName} in <${element.localName}>`);
+      }
     }
     for (const attribute of element.getAttributeNames()) {
       if (!ALLOWED_ATTRIBUTES.has(attribute)) {
@@ -181,7 +198,7 @@ function checkSafety(elements: Element[]): ContractCheck {
   return {
     id: SAFETY_CHECK_ID,
     status: "unsafe",
-    hint: `${offenders.length} element(s), attribute(s) or URL(s) are outside the safe allowlist: ${offenders
+    hint: `${offenders.length} element(s), node(s), attribute(s) or URL(s) are outside the safe allowlist: ${offenders
       .slice(0, 5)
       .join(", ")}. Sanitize the file before using it.`,
   };

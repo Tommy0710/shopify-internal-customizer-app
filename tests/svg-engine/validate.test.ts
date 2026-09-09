@@ -304,3 +304,99 @@ describe("sanitize then validate", () => {
     expect(validateSvgContract(root).valid).toBe(true);
   });
 });
+
+describe("checkSafety means 'sanitize would remove nothing' — non-element nodes too", () => {
+  const SOUND_BODY = `
+    <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
+    <path id="animal-shape" d="M2 2h4v4H2z"/>
+    <clipPath id="wallet-body-clip"><use href="#wallet-body-shape"/></clipPath>
+    <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+    <image id="body-artwork" clip-path="url(#wallet-body-clip)"/>
+    <image id="animal-artwork" clip-path="url(#animal-clip)"/>
+    <g id="stitches" fill="var(--wallet-stitches)"></g>`;
+
+  function contract(body: string): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">${body}</svg>`;
+  }
+
+  it("rejects a document carrying a comment node", () => {
+    // Cổng thứ hai phải chặn ĐÚNG cái mà sanitize gỡ. Trước bản vá, tài liệu
+    // này trả `valid: true` với `safety: ok` trong khi payload sống nguyên vẹn.
+    const report = validateSvgContract(
+      parseSvg(contract(`<!-- --!><script>alert(document.domain)</script><!-- -->${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(report.valid).toBe(false);
+    expect(report.checks.find((check) => check.id === "safety")?.hint).toContain("#comment");
+  });
+
+  it("rejects a comment nested anywhere, not only under the root", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(SOUND_BODY.replace(`<g id="stitches" fill="var(--wallet-stitches)">`, `<g id="stitches" fill="var(--wallet-stitches)"><!--x-->`))),
+    );
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(report.valid).toBe(false);
+  });
+
+  it.each([
+    ["a comment", `<!--x-->${SOUND_BODY}`],
+    ["a nested comment", `<g><!--x--></g>${SOUND_BODY}`],
+    ["a URL( external beacon", `<rect style="background-image:URL(http://evil.example/b.png)"/>${SOUND_BODY}`],
+    ["a clean document", SOUND_BODY],
+  ])("agrees with sanitizeSvgRoot about %s", (_label, body) => {
+    const source = contract(body);
+    const safety = statusOf(validateSvgContract(parseSvg(source)), "safety");
+    const report = sanitizeSvgRoot(parseSvg(source));
+    const sanitizerRemovedSomething =
+      report.removedElements.length > 0 || report.removedAttributes.length > 0;
+    expect(safety === "unsafe").toBe(sanitizerRemovedSomething);
+  });
+});
+
+describe("validateSvgContract url( is case-insensitive", () => {
+  const SOUND_BODY = `
+    <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
+    <path id="animal-shape" d="M2 2h4v4H2z"/>
+    <clipPath id="wallet-body-clip"><use href="#wallet-body-shape"/></clipPath>
+    <clipPath id="animal-clip"><use href="#animal-shape"/></clipPath>
+    <image id="body-artwork" clip-path="url(#wallet-body-clip)"/>
+    <image id="animal-artwork" clip-path="url(#animal-clip)"/>
+    <g id="stitches" fill="var(--wallet-stitches)"></g>`;
+
+  function contract(body: string): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">${body}</svg>`;
+  }
+
+  it.each(["url", "URL", "Url", "uRl"])("catches %j(#missing) as a dangling reference", (spelling) => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<rect clip-path="${spelling}(#does-not-exist)"/>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "references")).toBe("dangling-ref");
+    expect(report.valid).toBe(false);
+  });
+
+  it.each(["url", "URL", "Url", "uRl"])("catches %j(javascript:) as unsafe", (spelling) => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<rect style="fill:${spelling}(javascript:alert(1))"/>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(report.valid).toBe(false);
+  });
+
+  it.each(["url", "URL", "Url"])("still accepts an https texture behind %j(", (spelling) => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<rect style="fill:${spelling}(https://cdn.example/texture.webp)"/>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "safety")).toBe("ok");
+    expect(statusOf(report, "references")).toBe("ok");
+    expect(report.valid).toBe(true);
+  });
+
+  it("catches a CSS-escaped url( pointing at a missing id", () => {
+    const report = validateSvgContract(
+      parseSvg(contract(`<rect clip-path="\\75 rl(#does-not-exist)"/>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "references")).toBe("dangling-ref");
+    expect(report.valid).toBe(false);
+  });
+});
