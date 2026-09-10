@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as engine from "@/svg-engine";
+import { purityViolations } from "../helpers/purityFence";
 
 const SRC_DIR = fileURLToPath(new URL("../../src/svg-engine/", import.meta.url));
 
@@ -21,20 +22,6 @@ function engineSources(directory: string = SRC_DIR, prefix = ""): Array<[string,
     files.push([`${prefix}${entry.name}`, readFileSync(directory + entry.name, "utf8")]);
   }
   return files;
-}
-
-/**
- * Mọi cách nạp một module, không chỉ `import … from`. Bao gồm cả import chỉ
- * để chạy side-effect — `import "module";` không có `from` — vì regex cũ chỉ
- * bắt `from "…"`/`require(…)`/`import(…)` và bỏ lọt dạng này hoàn toàn.
- */
-function importPatterns(moduleName: string): RegExp[] {
-  return [
-    new RegExp(`from\\s*["']${moduleName}`),
-    new RegExp(`require\\s*\\(\\s*["']${moduleName}`),
-    new RegExp(`import\\s*\\(\\s*["']${moduleName}`),
-    new RegExp(`import\\s*["']${moduleName}`),
-  ];
 }
 
 describe("svg-engine public API", () => {
@@ -68,19 +55,10 @@ describe("svg-engine public API", () => {
   });
 
   it("stays free of framework and environment coupling", () => {
-    const forbidden = [
-      ...importPatterns("react"),
-      ...importPatterns("next"),
-      ...importPatterns("@prisma"),
-      ...importPatterns("linkedom"),
-      // process.env, process["env"], process['env'], process[`env`]
-      /process\s*(?:\.\s*env|\[\s*["'`]env)/,
-    ];
-    for (const [file, source] of engineSources()) {
-      for (const pattern of forbidden) {
-        expect(source, `${file} must not match ${pattern}`).not.toMatch(pattern);
-      }
-    }
+    // Luật dùng chung với hàng rào src/shared — xem tests/helpers/purityFence.ts.
+    // Trước final review P1b, danh sách ở đây không cấm node:* hay
+    // @supabase/supabase-js, trong khi hàng rào src/shared thì có.
+    expect(purityViolations(engineSources())).toEqual([]);
   });
 
   it("never parses SVG itself — callers supply the document", () => {

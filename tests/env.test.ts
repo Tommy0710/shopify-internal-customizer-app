@@ -55,6 +55,18 @@ describe(".env.example", () => {
   });
 });
 
+describe("process[…]", () => {
+  // `process["env"]` né được cả bộ thu thập tên biến lẫn guard khoá động bên dưới
+  // (cả hai tìm `process.env`). Không có lý do chính đáng nào để truy cập `process`
+  // bằng ngoặc vuông trong src/, nên cấm thẳng thay vì cố hiểu nó.
+  it("không file nào trong src/ truy cập process bằng ngoặc vuông", () => {
+    const offenders = sourceFiles(`${REPO}src/`, "src/")
+      .filter(({ body }) => /\bprocess\s*\[/.test(body))
+      .map(({ path }) => path);
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("process.env[key động]", () => {
   /**
    * Hàng rào cho chính cơ chế nhận diện ở trên: một `process.env[key]` với
