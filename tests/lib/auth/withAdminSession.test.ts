@@ -79,8 +79,41 @@ describe("withAdminSession", () => {
     const res = await route(req({ authorization: `Bearer ${await mintToken()}` }));
 
     expect(inner).toHaveBeenCalledTimes(1);
-    expect(inner.mock.calls[0][1]).toEqual({ session: { shopDomain: SHOP, userId: "42" } });
+    expect(inner.mock.calls[0][1]).toEqual({ session: { shopDomain: SHOP, userId: "42" }, params: {} });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ shop: SHOP });
+  });
+});
+
+describe("withAdminSession — context của Next", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  // Next gọi route handler dạng `handler(req, { params })`. Nếu wrapper nuốt mất
+  // tham số thứ hai, `params.id` thành undefined — và Prisma hiểu
+  // `where: { id: undefined }` là KHÔNG LỌC, nên một deleteMany trúng mọi hàng.
+  it("chuyển tiếp params của route động xuống handler bên trong", async () => {
+    useEnv();
+    const seen: Array<Record<string, string | string[]> | undefined> = [];
+    const route = withAdminSession<{ id: string }>(async (_req, ctx) => {
+      seen.push(ctx.params);
+      return Response.json({ id: ctx.params.id });
+    });
+    const token = await mintToken();
+    const res = await route(req({ authorization: `Bearer ${token}` }), { params: { id: "abc" } });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "abc" });
+    expect(seen).toEqual([{ id: "abc" }]);
+  });
+
+  it("route tĩnh không có params vẫn chạy — params là object rỗng, không undefined", async () => {
+    useEnv();
+    let captured: unknown = "chưa gọi";
+    const route = withAdminSession(async (_req, ctx) => {
+      captured = ctx.params;
+      return Response.json({});
+    });
+    const token = await mintToken();
+    await route(req({ authorization: `Bearer ${token}` }));
+    expect(captured).toEqual({});
   });
 });

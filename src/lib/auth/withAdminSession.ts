@@ -16,15 +16,24 @@ import type { AdminSession } from "./sessionToken";
  * `tests/app/api/admin/route-guard.test.ts` ép mọi handler export phải được
  * gán từ lời gọi `withAdminSession(`.
  */
-export function withAdminSession(
+/** Context Next 14 truyền cho route handler; `params` chỉ có ở route động. */
+export type AdminRouteParams = Record<string, string | string[]>;
+
+export function withAdminSession<P extends AdminRouteParams = AdminRouteParams>(
   handler: (
     req: NextRequest,
-    ctx: { session: AdminSession },
+    ctx: { session: AdminSession; params: P },
   ) => Promise<Response>,
-): (req: NextRequest) => Promise<Response> {
-  return async (req: NextRequest): Promise<Response> => {
+): (req: NextRequest, context?: { params?: P }) => Promise<Response> {
+  // Tham số thứ hai BẮT BUỘC phải chuyển tiếp. Next gọi `handler(req, { params })`;
+  // nuốt mất nó thì `params.id` thành undefined, và Prisma hiểu
+  // `where: { id: undefined }` là KHÔNG LỌC — một deleteMany sẽ trúng mọi hàng.
+  // Route tĩnh không có params: đưa object rỗng thay vì undefined, để handler
+  // không phải kiểm undefined và một lỗi gõ tên param lộ ra là `undefined`
+  // của đúng một khoá, không phải của cả object.
+  return async (req: NextRequest, context?: { params?: P }): Promise<Response> => {
     const auth = await requireAdminSession(req);
     if ("response" in auth) return auth.response;
-    return handler(req, { session: auth.session });
+    return handler(req, { session: auth.session, params: (context?.params ?? {}) as P });
   };
 }
