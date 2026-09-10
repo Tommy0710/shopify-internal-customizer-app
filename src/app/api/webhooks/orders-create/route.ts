@@ -1,79 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { hmacBypassEnabled, verifyShopifyWebhook } from "@/lib/hmac";
+import { verifyShopifyWebhook, hmacBypassEnabled } from "@/lib/hmac";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Nhận và xác thực webhook đơn hàng.
+ *
+ * P1b rút route này còn phần xác thực: nghiệp vụ cũ chạy trên schema đã bị thay.
+ * P4 dựng lại đầy đủ — idempotency hai lớp (`WebhookEvent` + `OrderLineDesign`),
+ * đối soát nhóm dòng MAIN/ADDON, tạo bản ghi sản xuất. Xem spec §11.
+ *
+ * Trả 200 cho mọi payload hợp lệ: Shopify retry khi nhận non-2xx, và ở giai đoạn
+ * này không có gì để retry cho thành công.
+ */
 export async function POST(req: NextRequest) {
-  try {
-    const rawBody = await req.text();
-    const hmacHeader = req.headers.get("x-shopify-hmac-sha256");
-    const shopHeader = req.headers.get("x-shopify-shop-domain") || "";
+  // BẮT BUỘC đọc raw body trước mọi thứ: `req.json()` rồi `JSON.stringify` lại
+  // sẽ đổi byte và HMAC sai.
+  const rawBody = await req.text();
+  const hmacHeader = req.headers.get("x-shopify-hmac-sha256");
 
-    if (!hmacBypassEnabled()) {
-      const isValid = verifyShopifyWebhook(rawBody, hmacHeader);
-      if (!isValid) {
-        return NextResponse.json({ error: "Invalid HMAC" }, { status: 401 });
-      }
-    }
-
-    const order = JSON.parse(rawBody);
-    console.log(`📦 Order Webhook: Order #${order.order_number} (ID: ${order.id}) from ${shopHeader}`);
-
-    const matchedJobs: string[] = [];
-
-    if (order.line_items && Array.isArray(order.line_items)) {
-      for (const lineItem of order.line_items) {
-        const designProp = lineItem.properties?.find(
-          (p: { name: string; value: string }) => p.name === "_custom_design_id"
-        );
-
-        if (designProp && designProp.value) {
-          const designId = designProp.value;
-
-          try {
-            // Update Design status to ORDERED
-            await db.design.update({
-              where: { id: designId },
-              data: { status: "ORDERED" },
-            });
-
-            // Create Production Job
-            const job = await db.productionJob.upsert({
-              where: { designId },
-              update: {
-                shopifyOrderId: String(order.id),
-                shopifyOrderNumber: String(order.order_number),
-                customerEmail: order.email || order.customer?.email || null,
-                shippingAddress: order.shipping_address ? `${order.shipping_address.address1}, ${order.shipping_address.city}` : null,
-                status: "NEW",
-              },
-              create: {
-                designId,
-                shopifyOrderId: String(order.id),
-                shopifyOrderNumber: String(order.order_number),
-                customerEmail: order.email || order.customer?.email || null,
-                shippingAddress: order.shipping_address ? `${order.shipping_address.address1}, ${order.shipping_address.city}` : null,
-                status: "NEW",
-                notes: `Line item: ${lineItem.title}`,
-              },
-            });
-
-            matchedJobs.push(job.id);
-          } catch (dbErr) {
-            console.warn(`Could not link design ${designId} with production job:`, dbErr);
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      orderNumber: order.order_number,
-      createdJobsCount: matchedJobs.length,
-    });
-  } catch (error: any) {
-    console.error("Webhook processing error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!hmacBypassEnabled() && !verifyShopifyWebhook(rawBody, hmacHeader)) {
+    return NextResponse.json({ error: "INVALID_HMAC" }, { status: 401 });
   }
+
+  return NextResponse.json({ ok: true });
 }
