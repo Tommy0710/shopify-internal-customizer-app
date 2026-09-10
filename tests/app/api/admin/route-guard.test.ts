@@ -31,6 +31,13 @@ import { describe, expect, it } from "vitest";
  *    `withAdminSession` hay không (đó là bài toán AST, regex không giải
  *    được). Một hình duy nhất được chấp nhận; `export { ... }` luôn đỏ.
  *
+ * 3. Final review P1b: bản trước quét THƯ MỤC `src/app/api/admin/`, không
+ *    quét URL. Route đặt trong route group (`api/(internal)/admin/x`) phục vụ
+ *    `/api/admin/x` nhưng nằm ngoài thư mục đó; `export let GET` thì
+ *    `exportedHandlers` không thấy. Cả hai đều lọt, `next build` liệt kê
+ *    chúng là route admin không guard. Vá bằng cách duyệt mọi file route dưới
+ *    `src/app/api/`, tính URL (bỏ segment `(group)`), và nhận cả `let`/`var`.
+ *
  * Giới hạn còn lại, chấp nhận có chủ đích: đây vẫn là quét văn bản. Một file
  * tự khai `function withAdminSession(h) { return h; }` (shadow cùng tên,
  * pass-through không guard gì) rồi `export const GET =
@@ -40,27 +47,56 @@ import { describe, expect, it } from "vitest";
  * được, không phải lỗ hổng cần vá tiếp.
  */
 
-const ADMIN_API = fileURLToPath(new URL("../../../../src/app/api/admin/", import.meta.url));
+const API_ROOT = fileURLToPath(new URL("../../../../src/app/api/", import.meta.url));
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
+const ROUTE_FILE = /^route\.(ts|tsx|js|jsx|mjs)$/;
 
-function routeFiles(dir: string, prefix = ""): Array<[string, string]> {
+/**
+ * URL mà Next phục vụ cho một file route, tính từ đường dẫn tương đối dưới
+ * `src/app/api/`. Segment `(group)` là route group — Next BỎ nó khỏi URL — nên
+ * `api/(internal)/admin/x/route.ts` phục vụ `/api/admin/x`.
+ *
+ * Final review P1b tìm ra lỗ: bản cũ chỉ quét thư mục `src/app/api/admin/`,
+ * nên một route đặt trong route group phục vụ `/api/admin/*` mà scanner không
+ * bao giờ nhìn thấy — `next build` liệt kê nó là `/api/admin/zzprobe`, không guard.
+ * Route group là cách bình thường để sắp xếp ~30 route, không phải mánh.
+ */
+export function routeUrl(relativePath: string): string {
+  const segments = relativePath.split("/").slice(0, -1); // bỏ tên file
+  const visible = segments.filter((segment) => !/^\(.*\)$/.test(segment));
+  return "/api/" + visible.join("/");
+}
+
+export function isAdminUrl(url: string): boolean {
+  return url === "/api/admin" || url.startsWith("/api/admin/");
+}
+
+function allRouteFiles(dir: string = API_ROOT, prefix = ""): Array<[string, string]> {
   if (!existsSync(dir)) return [];
   const found: Array<[string, string]> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      found.push(...routeFiles(`${dir}${entry.name}/`, `${prefix}${entry.name}/`));
+      found.push(...allRouteFiles(`${dir}${entry.name}/`, `${prefix}${entry.name}/`));
       continue;
     }
-    if (entry.name !== "route.ts") continue;
+    if (!ROUTE_FILE.test(entry.name)) continue;
     found.push([`${prefix}${entry.name}`, readFileSync(dir + entry.name, "utf8")]);
   }
   return found;
 }
 
+/** Mọi file route mà Next phục vụ dưới `/api/admin`, bất kể nằm trong route group nào. */
+function adminRouteFiles(): Array<[string, string]> {
+  return allRouteFiles().filter(([path]) => isAdminUrl(routeUrl(path)));
+}
+
 /** Đếm handler HTTP được export trong một file route. */
 export function exportedHandlers(source: string): string[] {
   return HTTP_METHODS.filter((method) =>
-    new RegExp(`export\\s+(?:async\\s+)?(?:function\\s+${method}\\b|const\\s+${method}\\s*[:=])`).test(source),
+    // `let`/`var` cũng phải được THẤY — nếu không, `export let GET = …` không guard
+    // cho exportedHandlers thấy zero handler và lọt qua. Thấy rồi, nó sẽ đỏ vì
+    // wrappedHandlers chỉ chấp nhận `export const`.
+    new RegExp(`export\\s+(?:async\\s+)?(?:function\\s+${method}\\b|(?:const|let|var)\\s+${method}\\s*[:=])`).test(source),
   );
 }
 
@@ -153,8 +189,29 @@ describe("bộ dò guard", () => {
   });
 });
 
+describe("bộ tính URL của route", () => {
+  it.each([
+    ["admin/leathers/route.ts", "/api/admin/leathers", true],
+    ["(internal)/admin/zzprobe/route.ts", "/api/admin/zzprobe", true],
+    ["(a)/(b)/admin/route.ts", "/api/admin", true],
+    ["admin/[id]/route.tsx", "/api/admin/[id]", true],
+    ["administrator/route.ts", "/api/administrator", false],
+    ["webhooks/orders-create/route.ts", "/api/webhooks/orders-create", false],
+    ["(admin)/leathers/route.ts", "/api/leathers", false],
+  ])("%s → %s (admin: %s)", (path, url, admin) => {
+    expect(routeUrl(path)).toBe(url);
+    expect(isAdminUrl(routeUrl(path))).toBe(admin);
+  });
+
+  it("thấy handler khai bằng let/var, và không coi chúng là đã bọc", () => {
+    const source = `export let GET = async () => Response.json({}); export var POST = withAdminSession(h);`;
+    expect(exportedHandlers(source)).toEqual(["GET", "POST"]);
+    expect(wrappedHandlers(source)).toEqual([]);
+  });
+});
+
 describe("/api/admin/* session guard", () => {
-  const files = routeFiles(ADMIN_API);
+  const files = adminRouteFiles();
 
   it.each(files.length ? files : [["(chưa có route admin nào)", ""]])(
     "%s: mọi handler export được gán từ withAdminSession(...)",
