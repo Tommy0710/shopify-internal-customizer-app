@@ -690,6 +690,8 @@ npx prisma generate
 
 `src/app/api/auth/callback/route.ts` và `src/app/api/webhooks/app-uninstalled/route.ts` đang dùng field `shop`. Đọc cả hai file, đổi sang `shopDomain`, và ở route uninstall ghi thêm `uninstalledAt: new Date()` cạnh `installed: false`. Ở callback, `upsert` phải set `installedAt` khi tạo mới và `uninstalledAt: null` khi cài lại.
 
+**Gộp thêm ở đây** (review Task 2 phát hiện, lỗi có từ trước): `webhooks/app-uninstalled/route.ts` **thiếu** `export const dynamic = "force-dynamic"`, trong khi `CLAUDE.md` khẳng định mọi route trừ `api/auth/*` đều có. Thêm vào.
+
 - [ ] **Step 6: Chạy test và toàn bộ**
 
 Run: `npx vitest run tests/prisma/schema.test.ts && npm test && npx tsc --noEmit && npm run build`
@@ -1342,6 +1344,7 @@ Ba mục đang mô tả sai thế giới sau P1b:
 - **"`src/app/page.tsx` là admin thật"** + "cây route `/admin/*` là bản cũ trùng chức năng" → `/admin/*` đã xoá; `page.tsx` giờ là shell chờ P2.
 
 Thêm mới, ngắn gọn:
+- **Route `/api/admin/*` phải viết bằng `withAdminSession`** (`src/lib/auth/withAdminSession.ts`), không chép tay prologue nữa. `tests/app/api/admin/route-guard.test.ts` khẳng định mọi handler export đều gán từ wrapper đó. Lý do: `requireAdminSession` *trả về* union `{session} | {response}`, nên gọi rồi vứt kết quả là route mở toang mà test cũ vẫn xanh. Mục CLAUDE.md đang mô tả guard như "prologue chép tay" phải viết lại theo đó.
 - `src/shared/` là code thuần, được bundle vào cả theme extension — hàng rào ở `tests/shared/purity.test.ts`.
 - Đường ghi SVG vào Storage chỉ nhận bản đã sanitize; giải thích một câu vì sao (`ownerDocument`).
 - Mục "Lệch giữa thiết kế và code hiện tại" cần viết lại: `pricingEngine`, `api/proxy/customizer-config`, `api/cart/validate` đã bị xoá, không còn là code chết nữa.
