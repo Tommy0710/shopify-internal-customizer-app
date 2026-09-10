@@ -322,7 +322,13 @@ export function exportedHandlers(source: string): string[] {
   );
 }
 
-/** Số lời gọi `requireAdminSession(` trong một file route. */
+/**
+ * Số lời GỌI `requireAdminSession(` trong một file route.
+ *
+ * Dòng `import { requireAdminSession } from "…"` KHÔNG được đếm: trong đó tên hàm
+ * theo sau là ` }` và `"`, không phải `(`. Nên con số trả về đã là số lời gọi
+ * thật — đừng trừ đi 1 ở nơi dùng.
+ */
 export function guardCallCount(source: string): number {
   return (source.match(/requireAdminSession\s*\(/g) ?? []).length;
 }
@@ -336,8 +342,9 @@ describe("bộ dò guard", () => {
       export async function POST(req: Request) { return Response.json({}); }
     `;
     expect(exportedHandlers(source)).toEqual(["GET", "POST"]);
-    expect(guardCallCount(source)).toBe(2); // 1 import + 1 call < 2 handler
-    expect(guardCallCount(source) - 1).toBeLessThan(exportedHandlers(source).length);
+    // Hai handler nhưng chỉ một lời gọi guard — POST bị hở.
+    expect(guardCallCount(source)).toBe(1);
+    expect(guardCallCount(source)).toBeLessThan(exportedHandlers(source).length);
   });
 
   it("nhận ra cả handler khai bằng const", () => {
@@ -357,10 +364,9 @@ describe("/api/admin/* session guard", () => {
         source,
         `${name}: phải import requireAdminSession`,
       ).toContain('from "@/lib/auth/requireAdminSession"');
-      // −1 vì dòng import cũng khớp regex đếm.
       expect(
-        guardCallCount(source) - 1,
-        `${name}: ${handlers.length} handler (${handlers.join(", ")}) nhưng chỉ ${guardCallCount(source) - 1} lời gọi guard`,
+        guardCallCount(source),
+        `${name}: ${handlers.length} handler (${handlers.join(", ")}) nhưng chỉ ${guardCallCount(source)} lời gọi guard`,
       ).toBeGreaterThanOrEqual(handlers.length);
     },
   );
@@ -779,9 +785,20 @@ describe("buildMainLineProperties", () => {
     expect(keys).not.toContain("Body Leather");
   });
 
-  it("KHÔNG bao giờ chứa giá, hex, hay tên file SVG", () => {
+  it("KHÔNG bao giờ chứa giá hay mã màu hex", () => {
     const serialized = JSON.stringify(buildMainLineProperties(MAIN_INPUT));
-    expect(serialized).not.toMatch(/price|\$|#[0-9a-fA-F]{6}|\.svg"/);
+    expect(serialized).not.toMatch(/price|\$\d|#[0-9a-fA-F]{6}/);
+  });
+
+  it("chỉ _wk_preview được mang đường dẫn file — không rò tên file SVG master", () => {
+    // Spec §4.4 cấm đưa "tên file SVG" vào properties. `_wk_preview` là ngoại lệ
+    // có chủ ý: nó là URL công khai của baked design SVG, chính là thứ cart dùng
+    // để hiện ảnh. Test này chốt rằng KHÔNG property nào KHÁC mang đuôi .svg.
+    const built = buildMainLineProperties(MAIN_INPUT);
+    const others = Object.entries(built).filter(([key]) => key !== WK_PROP.preview);
+    for (const [key, value] of others) {
+      expect(value, `${key} không được mang tên file`).not.toMatch(/\.svg\b/);
+    }
   });
 
   it("mọi khoá kỹ thuật đều bắt đầu bằng dấu gạch dưới (ẩn khỏi cart khách)", () => {
