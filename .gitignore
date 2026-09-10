@@ -127,3 +127,7 @@ supabase/.temp/
 
 # Scratch của quy trình superpowers (ledger, brief, report) — không commit
 .superpowers/
+
+# Bản đồ file tự viết cho người đọc local — cố ý không commit.
+# Đã bị stage nhầm ba lần (26a9d59, cd7c0e5); ignore để khỏi phụ thuộc trí nhớ.
+FILE_GUIDE.md
