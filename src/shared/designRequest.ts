@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseLineProperties } from "./lineItemProperties";
 import { designIdSchema, shareTokenSchema } from "./ids";
 
 /**
@@ -71,13 +72,43 @@ const summarySchema = z
  * cứng của spec §4.2 — tuple, không phải array kiểm độ dài, để type suy ra là
  * `[Line, Line]` và P3 truy cập lines[0]/lines[1] không cần kiểm undefined.
  */
-export const createDesignResponseSchema = z.object({
-  designId: designIdSchema,
-  shareToken: shareTokenSchema,
-  previewUrl: httpsUrl,
-  lines: z.tuple([lineSchema, lineSchema]),
-  summary: summarySchema,
-});
+export const createDesignResponseSchema = z
+  .object({
+    designId: designIdSchema,
+    shareToken: shareTokenSchema,
+    previewUrl: httpsUrl,
+    lines: z.tuple([lineSchema, lineSchema]),
+    summary: summarySchema,
+  })
+  // Đúng hình chưa đủ: properties của hai dòng phải khớp hợp đồng mà webhook sẽ
+  // đọc (`parseLineProperties`). Không ép điều này thì một response mang
+  // properties rỗng vẫn qua, widget vẫn add vào giỏ, và webhook coi đơn đó là
+  // đơn thường — mất liên kết đơn ↔ design mà không có tín hiệu nào.
+  .superRefine((response, ctx) => {
+    const [mainLine, addonLine] = response.lines;
+    const main = parseLineProperties(mainLine.properties);
+    const addon = parseLineProperties(addonLine.properties);
+
+    if (main?.role !== "main") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 0, "properties"], message: "lines[0] phải là dòng main hợp lệ" });
+    }
+    if (addon?.role !== "addon") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 1, "properties"], message: "lines[1] phải là dòng addon hợp lệ" });
+    }
+    if (main && main.designId !== response.designId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 0, "properties"], message: "designId của dòng main khác designId của response" });
+    }
+    if (addon && addon.designId !== response.designId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 1, "properties"], message: "designId của dòng addon khác designId của response" });
+    }
+    if (main?.role === "main" && main.previewUrl !== response.previewUrl) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 0, "properties"], message: "_wk_preview của dòng main khác previewUrl của response" });
+    }
+    // Hai dòng là một đơn vị: 2 ví thì cũng 2 phụ phí animal.
+    if (mainLine.quantity !== addonLine.quantity) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines"], message: "quantity của hai dòng phải bằng nhau" });
+    }
+  });
 
 export type CreateDesignResponse = z.infer<typeof createDesignResponseSchema>;
 

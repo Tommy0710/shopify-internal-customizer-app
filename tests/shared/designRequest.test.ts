@@ -5,6 +5,7 @@ import {
   designErrorCodeSchema,
   DESIGN_ERROR_CODES,
 } from "@/shared/designRequest";
+import { buildAddonLineProperties, buildMainLineProperties } from "@/shared/lineItemProperties";
 
 function validRequest() {
   return {
@@ -23,11 +24,24 @@ function validRequest() {
 const VALID_DESIGN_ID = "cd_7hK9mQwErTyUiOpAsDfXY";
 const VALID_SHARE_TOKEN = "A".repeat(22);
 
-function validLine(role: "main" | "addon") {
+const PREVIEW_URL = "https://cdn.example.com/preview/abc.svg";
+
+// Dựng bằng chính builder mà server sẽ dùng — fixture tay `{ _wk_role }` cũ không
+// còn hợp lệ từ khi response phải khớp hợp đồng line-property.
+function validLine(role: "main" | "addon", designId: string = VALID_DESIGN_ID) {
   return {
     variantId: "44928374652",
     quantity: 1,
-    properties: { _wk_role: role },
+    properties:
+      role === "main"
+        ? buildMainLineProperties({
+            designId,
+            previewUrl: PREVIEW_URL,
+            animalName: "Alligator",
+            animalLeatherName: "Togo Brown",
+            stitchName: "Gold",
+          })
+        : buildAddonLineProperties(designId),
   };
 }
 
@@ -35,7 +49,7 @@ function validResponse() {
   return {
     designId: VALID_DESIGN_ID,
     shareToken: VALID_SHARE_TOKEN,
-    previewUrl: "https://cdn.example.com/preview/abc.png",
+    previewUrl: PREVIEW_URL,
     lines: [validLine("main"), validLine("addon")],
     summary: { bodyPrice: 49, animalPrice: 12, total: 61 },
   };
@@ -154,5 +168,31 @@ describe("DESIGN_ERROR_CODES / designErrorCodeSchema", () => {
 
   it("mã lỗi bịa ra không parse được", () => {
     expect(designErrorCodeSchema.safeParse("SOME_MADE_UP_CODE").success).toBe(false);
+  });
+});
+
+// Response phải khớp hợp đồng line-property, không chỉ "đúng hình". Các ca dưới
+// đều từng được schema cũ chấp nhận. Ca nguy hiểm nhất là properties rỗng:
+// parseLineProperties trả null cho cả hai dòng, widget vẫn add vào giỏ, webhook
+// coi đó là đơn thường — mất liên kết đơn ↔ design mà không ai hay.
+describe("createDesignResponseSchema — khớp hợp đồng line-property", () => {
+  const OTHER_ID = "cd_" + "Z".repeat(21);
+
+  it("response dựng bằng buildMainLineProperties/buildAddonLineProperties parse được", () => {
+    expect(createDesignResponseSchema.safeParse(validResponse()).success).toBe(true);
+  });
+
+  it.each([
+    ["properties rỗng ở cả hai dòng", (r: any) => { r.lines[0].properties = {}; r.lines[1].properties = {}; }],
+    ["designId của dòng khác designId của response", (r: any) => { r.lines[1] = validLine("addon", OTHER_ID); }],
+    ["đảo main và addon", (r: any) => { r.lines = [validLine("addon"), validLine("main")]; }],
+    ["cả hai dòng đều main", (r: any) => { r.lines = [validLine("main"), validLine("main")]; }],
+    ["preview http:", (r: any) => { r.lines[0].properties._wk_preview = "http://cdn.example.com/x.svg"; }],
+    ["quantity lệch nhau (3 và 1)", (r: any) => { r.lines[0].quantity = 3; }],
+    ["preview của dòng main khác previewUrl của response", (r: any) => { r.lines[0].properties._wk_preview = "https://cdn.example.com/other.svg"; }],
+  ])("từ chối: %s", (_label, mutate) => {
+    const response = validResponse();
+    mutate(response);
+    expect(createDesignResponseSchema.safeParse(response).success).toBe(false);
   });
 });
