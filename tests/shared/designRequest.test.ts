@@ -190,6 +190,11 @@ describe("createDesignResponseSchema — khớp hợp đồng line-property", ()
     ["preview http:", (r: any) => { r.lines[0].properties._wk_preview = "http://cdn.example.com/x.svg"; }],
     ["quantity lệch nhau (3 và 1)", (r: any) => { r.lines[0].quantity = 3; }],
     ["preview của dòng main khác previewUrl của response", (r: any) => { r.lines[0].properties._wk_preview = "https://cdn.example.com/other.svg"; }],
+    // Dòng addon vốn ẩn: nhãn hiện cho khách lọt sang đây là khách thấy nhãn lặp
+    // trên một dòng lẽ ra vô hình. Response là output của CHÍNH server, nên chặt:
+    // mỗi dòng chỉ được mang đúng các khoá builder sinh ra.
+    ["dòng addon mang nhãn hiện cho khách", (r: any) => { r.lines[1].properties.Animal = "Alligator"; }],
+    ["dòng main mang khoá lạ", (r: any) => { r.lines[0].properties._wk_price = "0"; }],
   ])("từ chối: %s", (_label, mutate) => {
     const response = validResponse();
     mutate(response);

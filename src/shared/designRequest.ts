@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseLineProperties } from "./lineItemProperties";
+import { WK_LABEL, WK_PROP, parseLineProperties } from "./lineItemProperties";
 import { designIdSchema, shareTokenSchema } from "./ids";
 
 /**
@@ -72,6 +72,10 @@ const summarySchema = z
  * cứng của spec §4.2 — tuple, không phải array kiểm độ dài, để type suy ra là
  * `[Line, Line]` và P3 truy cập lines[0]/lines[1] không cần kiểm undefined.
  */
+/** Đúng các khoá `buildMainLineProperties` / `buildAddonLineProperties` sinh ra. */
+const MAIN_LINE_KEYS: ReadonlySet<string> = new Set([...Object.values(WK_PROP), ...Object.values(WK_LABEL)]);
+const ADDON_LINE_KEYS: ReadonlySet<string> = new Set([WK_PROP.designId, WK_PROP.role, WK_PROP.version]);
+
 export const createDesignResponseSchema = z
   .object({
     designId: designIdSchema,
@@ -103,6 +107,19 @@ export const createDesignResponseSchema = z
     }
     if (main?.role === "main" && main.previewUrl !== response.previewUrl) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 0, "properties"], message: "_wk_preview của dòng main khác previewUrl của response" });
+    }
+    // parseLineProperties strip khoá lạ — đúng cho webhook (đọc dữ liệu người lạ
+    // ghi), nhưng response là output của CHÍNH server nên phải chặt: mỗi dòng chỉ
+    // mang đúng các khoá builder sinh ra. Nhãn hiện lọt sang dòng addon (vốn ẩn)
+    // là khách thấy nhãn lặp trên một dòng lẽ ra vô hình.
+    const unexpected = (keys: string[], allowed: ReadonlySet<string>) => keys.filter((key) => !allowed.has(key));
+    const mainExtra = unexpected(Object.keys(mainLine.properties), MAIN_LINE_KEYS);
+    if (mainExtra.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 0, "properties"], message: `dòng main mang khoá lạ: ${mainExtra.join(", ")}` });
+    }
+    const addonExtra = unexpected(Object.keys(addonLine.properties), ADDON_LINE_KEYS);
+    if (addonExtra.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lines", 1, "properties"], message: `dòng addon mang khoá lạ: ${addonExtra.join(", ")}` });
     }
     // Hai dòng là một đơn vị: 2 ví thì cũng 2 phụ phí animal.
     if (mainLine.quantity !== addonLine.quantity) {
