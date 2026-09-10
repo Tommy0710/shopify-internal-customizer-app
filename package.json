@@ -14,12 +14,8 @@
     "bundle:extension": "node scripts/bundle-extension.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "node prisma/seed.mjs",
     "shopify:dev": "shopify app dev --skip-dependencies-installation",
     "shopify:deploy": "shopify app deploy"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",

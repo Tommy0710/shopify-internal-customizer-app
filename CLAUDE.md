@@ -14,7 +14,6 @@ npm run bundle:extension    # esbuild src/storefront-customizer → extensions/.
 npm run lint                # next lint
 npm run shopify:deploy      # deploy app config + theme extension (KHÔNG tự động khi push git)
 npm run prisma:push         # đẩy schema lên Supabase (dev, không tạo migration)
-npm run prisma:seed         # nạp config dây đồng hồ mẫu
 npx prisma studio           # GUI xem/sửa DB
 ```
 

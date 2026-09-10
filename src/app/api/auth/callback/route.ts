@@ -58,17 +58,20 @@ export async function GET(req: NextRequest) {
 
     // Save or update shop in Database
     await db.shop.upsert({
-      where: { shop },
+      where: { shopDomain: shop },
       update: {
         accessToken: tokenData.access_token,
         scope: tokenData.scope,
         installed: true,
+        // Cài lại: xoá dấu gỡ cài cũ, nếu không `uninstalledAt` sẽ nói dối.
+        uninstalledAt: null,
       },
       create: {
-        shop,
+        shopDomain: shop,
         accessToken: tokenData.access_token,
         scope: tokenData.scope,
         installed: true,
+        installedAt: new Date(),
       },
     });
 

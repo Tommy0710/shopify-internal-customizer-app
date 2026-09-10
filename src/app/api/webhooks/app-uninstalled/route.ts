@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hmacBypassEnabled, verifyShopifyWebhook } from "@/lib/hmac";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
@@ -17,8 +19,8 @@ export async function POST(req: NextRequest) {
 
     if (shopHeader) {
       await db.shop.updateMany({
-        where: { shop: shopHeader },
-        data: { installed: false },
+        where: { shopDomain: shopHeader },
+        data: { installed: false, uninstalledAt: new Date() },
       });
       console.log(`App uninstalled from shop: ${shopHeader}`);
     }
