@@ -23,12 +23,17 @@ function engineSources(directory: string = SRC_DIR, prefix = ""): Array<[string,
   return files;
 }
 
-/** Mọi cách nạp một module, không chỉ `import … from`. */
+/**
+ * Mọi cách nạp một module, không chỉ `import … from`. Bao gồm cả import chỉ
+ * để chạy side-effect — `import "module";` không có `from` — vì regex cũ chỉ
+ * bắt `from "…"`/`require(…)`/`import(…)` và bỏ lọt dạng này hoàn toàn.
+ */
 function importPatterns(moduleName: string): RegExp[] {
   return [
     new RegExp(`from\\s*["']${moduleName}`),
     new RegExp(`require\\s*\\(\\s*["']${moduleName}`),
     new RegExp(`import\\s*\\(\\s*["']${moduleName}`),
+    new RegExp(`import\\s*["']${moduleName}`),
   ];
 }
 

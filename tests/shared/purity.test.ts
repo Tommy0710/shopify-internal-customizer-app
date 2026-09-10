@@ -17,11 +17,18 @@ function sharedSources(directory: string = SHARED_DIR, prefix = ""): Array<[stri
   return files;
 }
 
+/**
+ * Mọi cách nạp một module, không chỉ `import … from`. Bao gồm cả import chỉ
+ * để chạy side-effect — `import "module";` không có `from` — vì regex cũ chỉ
+ * bắt `from "…"`/`require(…)`/`import(…)` và bỏ lọt dạng này hoàn toàn (xác
+ * nhận qua thực nghiệm: `import "node:crypto";` lọt qua hàng rào cũ).
+ */
 function importPatterns(moduleName: string): RegExp[] {
   return [
     new RegExp(`from\\s*["']${moduleName}`),
     new RegExp(`require\\s*\\(\\s*["']${moduleName}`),
     new RegExp(`import\\s*\\(\\s*["']${moduleName}`),
+    new RegExp(`import\\s*["']${moduleName}`),
   ];
 }
 
@@ -42,8 +49,11 @@ describe("src/shared thuần TypeScript", () => {
   });
 
   it("không import module node:*", () => {
+    const nodeImportPatterns = [/from\s*["']node:/, /import\s*\(\s*["']node:/, /import\s*["']node:/];
     for (const [file, body] of sharedSources()) {
-      expect(body, `${file} dùng node builtin`).not.toMatch(/from\s*["']node:/);
+      for (const pattern of nodeImportPatterns) {
+        expect(body, `${file} dùng node builtin`).not.toMatch(pattern);
+      }
     }
   });
 

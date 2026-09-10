@@ -67,9 +67,16 @@ export function buildAddonLineProperties(designId: string): Record<string, strin
   };
 }
 
+/**
+ * Giới hạn 1–6 chữ số (tối đa 999999). `_wk_v` dùng để phân biệt design cũ/mới
+ * (`parsed.version > WK_PROPERTY_VERSION` cho migration sau này) — một chuỗi
+ * số không giới hạn độ dài (vd. "9".repeat(400)) sẽ `Number()` thành `Infinity`,
+ * khiến check đó coi mọi design là "tương lai". Chặn ngay ở tầng chuỗi trước
+ * khi `Number()` chạy, thay vì tin `.int()` bắt được `Infinity` sau đó.
+ */
 const versionSchema = z
   .string()
-  .regex(/^\d+$/, "version phải là chuỗi số")
+  .regex(/^\d{1,6}$/, "version phải là chuỗi số 1-6 chữ số")
   .transform(Number);
 
 const mainRoleSchema = z.object({

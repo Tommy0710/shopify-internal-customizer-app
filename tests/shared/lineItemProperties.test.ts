@@ -102,6 +102,13 @@ describe("parseLineProperties", () => {
     ["designId sai định dạng", { [WK_PROP.designId]: "'; DROP TABLE", [WK_PROP.role]: "main", [WK_PROP.version]: "1" }],
     ["role lạ", { [WK_PROP.designId]: DESIGN_ID, [WK_PROP.role]: "admin", [WK_PROP.version]: "1" }],
     ["version không phải số", { [WK_PROP.designId]: DESIGN_ID, [WK_PROP.role]: "main", [WK_PROP.version]: "v1" }],
+    [
+      // "9".repeat(400) qua Number() thành Infinity — nếu lọt qua, một check
+      // tương lai kiểu `parsed.version > WK_PROPERTY_VERSION` sẽ coi design
+      // này là "từ tương lai" mãi mãi. version phải bị chặn ở tầng chuỗi.
+      "version dài bất thường (400 chữ số)",
+      { ...buildMainLineProperties(MAIN_INPUT), [WK_PROP.version]: "9".repeat(400) },
+    ],
     ["null", null],
     ["chuỗi", "_wk_design_id=cd_x"],
   ])("trả null cho %s", (_label, input) => {
