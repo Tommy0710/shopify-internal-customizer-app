@@ -163,10 +163,11 @@ VERCEL — Next.js 14 App Router
       ┌─────────────┴──────────────┐
       ▼                            ▼
 Supabase Postgres            Supabase Storage (CDN, public read)
-  pooled 6543 runtime          svg/{sha256}.svg        đã sanitize
+  pooled 6543 runtime          svg_mockup/{sha256}.svg  đã sanitize
   direct 5432 migrate          texture/{sha256}.webp
                                display/{sha256}.webp
-                               design/{sha256}.svg     baked
+                               design_svg/{sha256}.svg  baked
+                               (thư mục = AssetKind viết thường — storagePathFor)
 ```
 
 ### 5.1. Không iframe — dùng Shadow DOM

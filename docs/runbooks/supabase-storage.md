@@ -101,33 +101,38 @@ Kỳ vọng: HTTP 200, `access-control-allow-origin: *`, `content-type` khớp
 
 ## 6. Áp schema lần đầu (`npm run prisma:push`)
 
-`npm run prisma:push` (= `prisma db push`) là thao tác **phá huỷ trên DB
-thật** — không phải thao tác an toàn để chạy tuỳ tiện. Sự thật đã kiểm
-chứng, không phải suy đoán:
+`npm run prisma:push` (= `prisma db push`) sẽ **không chạy được** trên DB hiện
+tại, và cách duy nhất để áp schema là **reset toàn bộ database**. Đây không
+phải thao tác xoá có chọn lọc. Sự thật đã kiểm chứng (đọc mã CLI Prisma, không
+chạy thật):
 
-- Lệnh này **KHÔNG** có cờ `--accept-data-loss`, nên Prisma sẽ **DỪNG lại và
-  in cảnh báo liệt kê từng thay đổi phá huỷ**, chờ xác nhận — nó không âm
-  thầm xoá gì cả.
-- Khi xác nhận, nó sẽ:
-  1. **DROP 8 bảng cũ** thuộc schema trước P1b (`ProductConfig`,
-     `OptionGroup`, `OptionValue`, `CompatibilityRule`, `PriceRule`,
-     `Design`, `DesignSelection`, `ProductionJob`).
-  2. **Viết lại bảng `Shop`**: cột `shop` (cũ) → `shopDomain` (mới), kiểu
-     `NOT NULL` và **không có default**. Hàng `Shop` hiện tại trong DB —
-     bản ghi duy nhất giữ `accessToken` OAuth của store — **không sống sót
-     qua thao tác này**.
-- Hệ quả trực tiếp: **mất `accessToken` đã lưu**. App sẽ không gọi được
-  Admin API cho tới khi cài lại.
+- Bảng `Shop` đang có một hàng, và schema mới thêm cột bắt buộc `shopDomain`
+  **không có default**. Prisma xếp bước này vào loại *"it is not possible to
+  execute this step"* — không phải một cảnh báo mất dữ liệu để bạn gõ "yes".
+- Vì vậy `npm run prisma:push` sẽ dừng lại. Trong terminal tương tác, Prisma
+  đề nghị *"We need to reset the database … All data will be lost"*; ngoài
+  terminal tương tác, nó ném lỗi và gợi ý `--force-reset`. Cả hai đường đều là
+  **reset toàn schema**: xoá sạch MỌI bảng, không chỉ 8 bảng cũ.
+- Hệ quả: mất luôn hàng `Shop` và `accessToken` OAuth của store. App không gọi
+  được Admin API cho tới khi cài lại.
+
+Chấp nhận được **chỉ vì** dữ liệu hiện tại đã được thống nhất là seed demo, cắt
+sạch. Nếu DB từng có dữ liệu thật, dừng lại và viết migration thay vì chạy lệnh
+dưới đây.
 
 ### Thứ tự thao tác (làm đúng thứ tự, không đảo)
 
-1. Xác nhận đã backup nếu DB có dữ liệu thật cần giữ (dev/demo — không bắt
-   buộc, nhưng nên chụp lại nếu không chắc).
+1. Xác nhận lại DB đích **chỉ chứa dữ liệu demo**. Không chắc thì chụp lại
+   trước (Supabase Dashboard → Database → Backups).
 2. Đặt `DATABASE_URL` và `DIRECT_URL` trỏ đúng project Supabase định áp
    schema (không chạy nhầm lên project khác).
-3. Chạy `npm run prisma:push`. Đọc kỹ danh sách cảnh báo phá huỷ Prisma in
-   ra — đây là cơ hội DUY NHẤT để dừng lại trước khi mất dữ liệu. Xác nhận
-   khi đã chắc.
+3. Chạy tường minh, biết mình đang reset:
+
+   ```bash
+   npx prisma db push --force-reset
+   ```
+
+   Lệnh này xoá toàn bộ schema rồi tạo lại theo `prisma/schema.prisma`.
 4. **Cài lại app qua Shopify OAuth ngay sau khi push xong** — bảng `Shop` giờ
    trống, mọi route đọc `accessToken` sẽ lỗi cho tới khi có hàng mới:
    - Shopify Admin của shop (`wildandking-demo.myshopify.com` hoặc store

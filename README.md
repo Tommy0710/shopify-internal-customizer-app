@@ -171,7 +171,7 @@ npm run prisma:push         # đẩy schema lên Supabase (dev — không tạo 
 npx prisma studio           # GUI xem/sửa dữ liệu tại localhost:5555
 ```
 
-`npm run prisma:push` **không có `--accept-data-loss`** nên nó dừng lại và cảnh báo trước khi phá huỷ gì — nhưng khi chạy lần đầu trên một DB đang có schema cũ, nó SẼ xoá bảng cũ và làm mất hàng `Shop` hiện tại (mất `accessToken`, phải cài lại app). Quy trình đầy đủ, đúng thứ tự: **`docs/runbooks/supabase-storage.md`, mục "Áp schema lần đầu"**.
+Lần đầu áp schema P1b lên DB đang có schema cũ, `npm run prisma:push` **sẽ không chạy được**: bảng `Shop` có một hàng và cột bắt buộc mới `shopDomain` không có default, nên Prisma chỉ còn đường **reset toàn bộ database** (`npx prisma db push --force-reset`) — xoá sạch mọi bảng, mất `accessToken`, phải cài lại app. Chấp nhận được chỉ vì dữ liệu hiện tại là seed demo. Quy trình đầy đủ, đúng thứ tự: **`docs/runbooks/supabase-storage.md`, mục "Áp schema lần đầu"**.
 
 Không còn `prisma/seed.mjs` — dữ liệu attribute/product nhập qua admin UI (P2) hoặc Prisma Studio thủ công.
 
@@ -239,8 +239,9 @@ cp .env.example .env
 # 4. Sinh Prisma Client + đồng bộ schema
 npm run prisma:generate
 npm run prisma:push
-#    Lần ĐẦU TIÊN trên một DB có schema cũ: đây là thao tác PHÁ HUỶ, đọc
-#    docs/runbooks/supabase-storage.md mục "Áp schema lần đầu" TRƯỚC khi chạy.
+#    Lần ĐẦU TIÊN trên một DB có schema cũ: lệnh này sẽ dừng và đòi RESET TOÀN
+#    BỘ database. Đọc docs/runbooks/supabase-storage.md mục "Áp schema lần đầu"
+#    TRƯỚC khi chạy.
 
 # 5. Build bundle cho theme extension
 npm run bundle:extension
@@ -283,7 +284,7 @@ Truy cập: shell admin tạm thời (chờ P2) tại `http://localhost:3000`, x
    ma trận A/B (priceInput), upload SVG per style×animal, "Generate variants"
    sinh Shopify variant thật rồi ghi ngược shopifyVariantId.
      → toàn bộ dưới /api/admin/*, bắt buộc viết bằng withAdminSession
-        (xem CLAUDE.md; hiện src/app/api/admin/ RỖNG, chưa có route.ts nào)
+        (xem CLAUDE.md; thư mục src/app/api/admin/ CHƯA tồn tại — P2 tạo nó)
 
 ③ KHÁCH TÙY CHỈNH TRÊN STOREFRONT (P3 — chưa viết)
    Trang sản phẩm render block customizer.liquid → customizer-bundle.js mount
@@ -410,7 +411,7 @@ Backend Vercel: vào Vercel Dashboard → Deployments → chọn bản cũ → *
 | Upload SVG bị từ chối ở `uploadSanitizedSvg` | Caller quên `sanitizeSvgRoot()` trước khi gọi, hoặc truyền bytes gốc còn comment/DOCTYPE trước thẻ `<svg>` — xem CLAUDE.md mục "Ghi SVG vào Storage" |
 | Texture vỡ khi nạp inline trong SVG (nhưng `<img>` thường vẫn load được) | Thiếu CORS trên bucket Supabase — xem `docs/runbooks/supabase-storage.md` mục Kiểm chứng |
 | `PrismaClientInitializationError` trên Vercel | Thiếu `DATABASE_URL`/`DIRECT_URL`, hoặc quên `?pgbouncer=true&connection_limit=1` ở pooled URL |
-| `npm run prisma:push` cảnh báo phá huỷ / dừng lại | Bình thường — không có `--accept-data-loss`. Đọc kỹ danh sách trước khi xác nhận. Xem runbook mục "Áp schema lần đầu" nếu đây là lần đầu trên DB có schema cũ |
+| `npm run prisma:push` dừng, báo "not possible to execute this step" hoặc đòi reset | Lần đầu áp schema P1b lên DB có schema cũ: cột bắt buộc `shopDomain` không default trên bảng `Shop` đang có hàng. Chỉ còn đường `npx prisma db push --force-reset` (xoá sạch mọi bảng). Làm theo runbook mục "Áp schema lần đầu" |
 | Tổng tiền đối soát đơn sai một cách kỳ lạ (ra chuỗi thay vì số) | Cộng trực tiếp hai cột `Decimal` bằng `+` — dùng `.plus()` của Decimal.js |
 | Lỗi parse `shopify.app.toml` | Có `key = value` cấp gốc nằm sau `[section]` — di chuyển lên đầu file |
 | Type error khi build sau khi sửa customizer | Đã đổi import React → Preact trong source. Hoàn nguyên về `react`; alias chỉ đặt ở `scripts/bundle-extension.mjs` |
