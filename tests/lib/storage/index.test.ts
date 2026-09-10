@@ -5,6 +5,7 @@ import type { AssetKind } from "@prisma/client";
 import { parseSvgFromText } from "@/lib/svg/parseSvgNode";
 import { sanitizeSvgRoot } from "@/svg-engine";
 import {
+  AssetRejectedError,
   MAX_ASSET_BYTES,
   createStorageClient,
   sha256Hex,
@@ -681,4 +682,101 @@ describe("uploadSanitizedSvg", () => {
       expect(result.mimeType).toBe("image/svg+xml");
     },
   );
+});
+
+// --- AssetRejectedError: từ chối do INPUT phải phân biệt được với lỗi hạ tầng ---
+//
+// Route tầng trên (`src/lib/admin/assets.ts`) dùng `instanceof AssetRejectedError`
+// để quyết định 422 (file hỏng) hay để lỗi nổi lên thành 500 (Storage sập).
+// Mọi từ chối do input liệt trong brief Step 1 phải là AssetRejectedError; lỗi
+// từ chính client Storage (upload trả `{ error }`) phải KHÔNG phải.
+
+describe("AssetRejectedError — phân biệt từ chối do input với lỗi hạ tầng", () => {
+  it("uploadBinaryAsset: mimeType ngoài allowlist", async () => {
+    const { client } = createFakeClient();
+    await expect(
+      uploadBinaryAsset({ kind: "DISPLAY" as AssetKind, bytes: pngBytes(), mimeType: "image/gif", client }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadBinaryAsset: magic bytes không khớp mimeType đã khai", async () => {
+    const { client } = createFakeClient();
+    const svgBytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    await expect(
+      uploadBinaryAsset({ kind: "TEXTURE" as AssetKind, bytes: svgBytes, mimeType: "image/png", client }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadBinaryAsset: file bị cắt cụt", async () => {
+    const { client } = createFakeClient();
+    const truncated = new Uint8Array([0x89, 0x50]);
+    await expect(
+      uploadBinaryAsset({ kind: "TEXTURE" as AssetKind, bytes: truncated, mimeType: "image/png", client }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadBinaryAsset: vượt MAX_ASSET_BYTES", async () => {
+    const { client } = createFakeClient();
+    const tooBig = webpBytes(MAX_ASSET_BYTES + 1);
+    await expect(
+      uploadBinaryAsset({ kind: "TEXTURE" as AssetKind, bytes: tooBig, mimeType: "image/webp", client }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadSanitizedSvg: bytes gốc — XML prolog trước <svg>", async () => {
+    const { client } = createFakeClient();
+    await expect(
+      uploadSanitizedSvg({
+        kind: "SVG_MOCKUP" as AssetKind,
+        svg: '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+        client,
+      }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadSanitizedSvg: chưa qua sanitizeSvgRoot (javascript: href)", async () => {
+    const { client } = createFakeClient();
+    await expect(
+      uploadSanitizedSvg({
+        kind: "SVG_MOCKUP" as AssetKind,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect width="1" height="1"/></a></svg>',
+        client,
+      }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadSanitizedSvg: không round-trip (nội dung sau </svg>)", async () => {
+    const { client } = createFakeClient();
+    await expect(
+      uploadSanitizedSvg({
+        kind: "SVG_MOCKUP" as AssetKind,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect /></svg><iframe src="javascript:alert(1)">',
+        client,
+      }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("uploadSanitizedSvg: vượt MAX_ASSET_BYTES", async () => {
+    const { client } = createFakeClient();
+    const filler = " ".repeat(MAX_ASSET_BYTES);
+    const huge = `<svg xmlns="http://www.w3.org/2000/svg">${filler}</svg>`;
+    await expect(
+      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg: huge, client }),
+    ).rejects.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("lỗi từ client Storage thật (upload trả { error }) KHÔNG phải AssetRejectedError — của uploadBinaryAsset", async () => {
+    const { client } = createFakeClient({ failWith: { message: "network is down" } });
+    await expect(
+      uploadBinaryAsset({ kind: "TEXTURE" as AssetKind, bytes: webpBytes(), mimeType: "image/webp", client }),
+    ).rejects.not.toBeInstanceOf(AssetRejectedError);
+  });
+
+  it("lỗi từ client Storage thật (upload trả { error }) KHÔNG phải AssetRejectedError — của uploadSanitizedSvg", async () => {
+    const { client } = createFakeClient({ failWith: { message: "network is down" } });
+    const cleanSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10H0z" /></svg>';
+    await expect(
+      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg: cleanSvg, client }),
+    ).rejects.not.toBeInstanceOf(AssetRejectedError);
+  });
 });

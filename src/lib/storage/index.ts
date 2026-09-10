@@ -55,6 +55,22 @@ export const ALLOWED_BINARY_MIME_TYPES: Readonly<Record<string, string>> = {
 /** File bất biến theo checksum — cache dài hạn, "immutable" là an toàn. */
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
+/**
+ * Ném cho MỌI từ chối do INPUT — kích thước, mime, magic bytes, bytes gốc,
+ * chưa sanitize, không round-trip. Lỗi từ chính Supabase Storage (client trả
+ * `{ error }`, mạng sập…) giữ nguyên `Error` thường — route tầng trên
+ * (`src/lib/admin/assets.ts`) phân biệt hai loại bằng `instanceof
+ * AssetRejectedError`: input hỏng → 422, hạ tầng sập → 500. Nhầm chiều nào
+ * cũng tệ (sập báo "file của bạn hỏng", hoặc file hỏng báo 500 làm on-call
+ * tưởng Storage sập).
+ */
+export class AssetRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AssetRejectedError";
+  }
+}
+
 export interface StoredAsset {
   storagePath: string;
   publicUrl: string;
@@ -222,20 +238,20 @@ export interface UploadBinaryAssetInput {
 export async function uploadBinaryAsset(input: UploadBinaryAssetInput): Promise<StoredAsset> {
   const extension = ALLOWED_BINARY_MIME_TYPES[input.mimeType];
   if (!extension) {
-    throw new Error(
+    throw new AssetRejectedError(
       `uploadBinaryAsset: mimeType "${input.mimeType}" không nằm trong allowlist (${Object.keys(ALLOWED_BINARY_MIME_TYPES).join(", ")})`,
     );
   }
 
   const magicCheck = MAGIC_BYTE_CHECK[input.mimeType];
   if (!magicCheck || !magicCheck(input.bytes)) {
-    throw new Error(
+    throw new AssetRejectedError(
       `uploadBinaryAsset: bytes không khớp magic number của mimeType đã khai "${input.mimeType}" (file bị cắt cụt, sai định dạng, hay mimeType giả mạo)`,
     );
   }
 
   if (input.bytes.byteLength > MAX_ASSET_BYTES) {
-    throw new Error(
+    throw new AssetRejectedError(
       `uploadBinaryAsset: file ${input.bytes.byteLength} byte vượt MAX_ASSET_BYTES (${MAX_ASSET_BYTES})`,
     );
   }
@@ -284,7 +300,7 @@ const SVG_OPEN_TAG_RE = /^<svg(?=[\s/>])/i;
 function assertNoRawSvgBytes(svg: string): void {
   const trimmed = svg.trim();
   if (!SVG_OPEN_TAG_RE.test(trimmed)) {
-    throw new Error(
+    throw new AssetRejectedError(
       "uploadSanitizedSvg: chuỗi không bắt đầu bằng thẻ <svg> hợp lệ sau khi trim — trông như bytes SVG gốc " +
         '(XML prolog, DOCTYPE, comment trước thẻ <svg>, hay một thẻ khác chỉ TRÙNG tiền tố như "<svgx…>"). ' +
         "Caller phải parse, gọi sanitizeSvgRoot(), rồi truyền root.outerHTML.",
@@ -300,13 +316,13 @@ function assertNoRawSvgBytes(svg: string): void {
   // hay `<style>@import` — verifier ở dưới mới bắt những cái đó, vì nó chạy
   // đúng sanitizer thật, đọc đúng allowlist thật.
   if (svg.includes("<!--")) {
-    throw new Error("uploadSanitizedSvg: chuỗi chứa comment <!-- — gọi sanitizeSvgRoot() trước khi lưu");
+    throw new AssetRejectedError("uploadSanitizedSvg: chuỗi chứa comment <!-- — gọi sanitizeSvgRoot() trước khi lưu");
   }
   if (/<script/i.test(svg)) {
-    throw new Error("uploadSanitizedSvg: chuỗi chứa <script — gọi sanitizeSvgRoot() trước khi lưu");
+    throw new AssetRejectedError("uploadSanitizedSvg: chuỗi chứa <script — gọi sanitizeSvgRoot() trước khi lưu");
   }
   if (/\bon[a-z]+\s*=/i.test(svg)) {
-    throw new Error(
+    throw new AssetRejectedError(
       "uploadSanitizedSvg: chuỗi chứa thuộc tính on*= (event handler) — gọi sanitizeSvgRoot() trước khi lưu",
     );
   }
@@ -334,7 +350,7 @@ function assertGenuinelySanitized(svg: string): void {
   const reserialized = root.outerHTML;
   const report = sanitizeSvgRoot(root);
   if (report.removedElements.length > 0 || report.removedAttributes.length > 0) {
-    throw new Error(
+    throw new AssetRejectedError(
       "uploadSanitizedSvg: chuỗi chưa qua sanitizeSvgRoot() — sanitize lần hai (chỉ để kiểm tra, không dùng để " +
         `lưu) vẫn gỡ ra elements=[${report.removedElements.join(", ")}] attributes=[${report.removedAttributes.join(", ")}]. ` +
         "Gọi sanitizeSvgRoot() trên chính root rồi mới truyền root.outerHTML vào đây.",
@@ -352,7 +368,7 @@ function assertGenuinelySanitized(svg: string): void {
   // — từ chối, kể cả khi phần khác biệt chỉ là cách viết (`<svg></svg>` thay
   // vì `<svg />`): caller gõ tay chuỗi là caller đã rời hợp đồng.
   if (reserialized !== svg.trim()) {
-    throw new Error(
+    throw new AssetRejectedError(
       "uploadSanitizedSvg: chuỗi không khớp root.outerHTML của chính nó khi parse lại — có nội dung nằm ngoài " +
         "thẻ <svg> gốc (sau </svg>), hoặc chuỗi không phải do root.outerHTML sinh ra. " +
         "Caller phải parse, gọi sanitizeSvgRoot(), rồi truyền nguyên root.outerHTML.",
@@ -366,7 +382,7 @@ export async function uploadSanitizedSvg(input: UploadSanitizedSvgInput): Promis
 
   const byteSize = Buffer.byteLength(input.svg, "utf8");
   if (byteSize > MAX_ASSET_BYTES) {
-    throw new Error(`uploadSanitizedSvg: SVG ${byteSize} byte vượt MAX_ASSET_BYTES (${MAX_ASSET_BYTES})`);
+    throw new AssetRejectedError(`uploadSanitizedSvg: SVG ${byteSize} byte vượt MAX_ASSET_BYTES (${MAX_ASSET_BYTES})`);
   }
 
   assertGenuinelySanitized(input.svg);
