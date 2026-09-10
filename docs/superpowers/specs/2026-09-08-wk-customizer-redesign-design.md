@@ -438,7 +438,8 @@ model ProductStyleLeather {
   shopifyVariantGid    String
   variantTitleSnapshot String?
   variantSkuSnapshot   String?
-  variantPriceSnapshot Decimal? @db.Decimal(10,2)   // CHỈ admin xem
+  priceInput           Decimal? @db.Decimal(10,2)   // giá admin gõ vào lưới, chưa chắc đã sync
+  variantPriceSnapshot Decimal? @db.Decimal(10,2)   // giá đọc ngược từ Shopify — CHỈ admin xem
   variantSyncedAt      DateTime?
   variantMissing       Boolean  @default(false)
 
@@ -469,6 +470,7 @@ model AnimalLeather {
   shopifyVariantId     String
   shopifyVariantGid    String
   variantTitleSnapshot String?
+  priceInput           Decimal? @db.Decimal(10,2)   // giá admin gõ vào lưới, chưa chắc đã sync
   variantPriceSnapshot Decimal? @db.Decimal(10,2)
   variantSyncedAt      DateTime?
   variantMissing       Boolean  @default(false)
@@ -637,6 +639,12 @@ Ba mục đích khác nhau, không trùng lặp:
 
 Attribute không bao giờ hard-delete. `CustomDesignSelection.attributeId` là soft reference nên xoá attribute không phá đơn cũ.
 
+### 7.4. Rulings ghi nhận khi hiện thực hoá (P1b)
+
+**R5 — cụm bất biến không mang FK nào, kể cả `shopId`.** Đoạn mở đầu §7 đã nói `CustomDesign.*Id`/`CustomDesignSelection.attributeId` là soft reference không FK; ruling này mở rộng thêm một bậc: **`CustomDesign.shopId` cũng là một cột `String` trần, không phải quan hệ Prisma `@relation` tới `Shop`.** Lý do giống hệt lý do các `*Id` khác không mang FK — nếu `shopId` là FK thật, xoá/đổi shop (hiếm nhưng không phải không thể — hợp nhất store, hay môi trường test dọn dẹp) sẽ vướng ràng buộc FK vào đúng bảng lẽ ra phải bất biến tuyệt đối. `@@unique([shopId, shareToken])` và `@@unique([shopId, idempotencyKey])` vẫn dùng `shopId` để scope tính duy nhất — chỉ là không có `@relation` đằng sau cột đó.
+
+**R6 — thêm `priceInput` vào `ProductStyleLeather` và `AnimalLeather`** (khối §7 ở trên đã cập nhật cả hai model). Bản spec gốc chỉ có `variantPriceSnapshot` — giá **đọc ngược từ Shopify sau khi variant đã tồn tại**. Nhưng UI mô tả ở §12.2 cho thấy admin gõ giá vào ô (`$ 80.00`) **trước khi** bấm "Generate variants" — tại thời điểm đó chưa có variant Shopify nào để đọc ngược giá, nên không có chỗ nào lưu con số admin vừa gõ. `priceInput` là chỗ đó: giá trị admin nhập, dùng làm input cho bước generate variant (`POST .../variants/generate` đọc `priceInput` để set giá Shopify variant mới), độc lập với `variantPriceSnapshot` (chỉ có giá trị sau khi đã sync — có thể lệch với `priceInput` nếu ai đó sửa giá thẳng trên Shopify Admin, đó là tín hiệu cần `variantSyncedAt`/`variantMissing` theo dõi).
+
 ---
 
 ## 8. API surface
@@ -655,9 +663,8 @@ POST   /api/admin/leathers/reorder              { orderedIds: [] }
    … /stitches  /animals  /styles
 
 # Assets
-POST   /api/admin/assets/upload-url             { kind, filename, mimeType, byteSize }
-                                                → { uploadUrl, storagePath }
-POST   /api/admin/assets/commit                 { storagePath, kind, originalFilename }
+POST   /api/admin/assets                        multipart; server sanitize SVG rồi mới lưu
+                                                → { assetId, publicUrl, validation? }
 POST   /api/admin/assets/validate-svg           dry-run, không lưu
 
 # Shopify passthrough (server giữ accessToken)
@@ -694,6 +701,8 @@ PATCH  /api/admin/order-lines/:id                { productionStatus, productionN
 ```
 
 Dùng `PUT` cho quan hệ: admin gửi **toàn bộ** danh sách mong muốn, server diff. Tránh trạng thái nửa vời khi network fail và khớp với UI (checkbox + drag sort → lưu một lần).
+
+**Ruling R2 (P1b):** bỏ luồng signed-upload-url hai bước (`upload-url` → browser PUT thẳng lên bucket → `commit`) khỏi bản `# Assets` ở trên — luồng đó để browser ghi **bytes chưa lọc** thẳng vào bucket public, tức XSS (rủi ro S1, §13.2) nằm giữa lúc ghi và lúc admin/route nào đó lỡ đọc lại trước khi kiểm. Thay bằng một request multipart duy nhất đi qua server: `POST /api/admin/assets` nhận file, sanitize (SVG) hoặc kiểm magic byte (ảnh nhị phân), rồi mới gọi `uploadSanitizedSvg`/`uploadBinaryAsset` (`src/lib/storage/index.ts`) — không có đường nào để bytes chưa lọc chạm bucket. Cái giá phải trả: file đi qua Vercel serverless (giới hạn body ~4.5MB — xem `MAX_ASSET_BYTES`), không phải trực tiếp browser→Supabase; chấp nhận được vì asset (SVG, texture) luôn nhỏ hơn nhiều so với giới hạn đó.
 
 **Ví dụ `validate-svg`:**
 
