@@ -1265,6 +1265,7 @@ Task cuối: làm cho những gì sáu task trước dựng nên **vận hành �
 - Modify: `.env.example`
 - Create: `docs/runbooks/supabase-storage.md`
 - Modify: `CLAUDE.md`
+- Modify: `README.md` (mô tả model tree đã không còn tồn tại — viết lại, không vá)
 - Modify: `docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md` (§8.1 và §7)
 - Test: `tests/env.test.ts`
 
@@ -1367,8 +1368,13 @@ Kèm một đoạn ghi rõ ruling R2 và lý do (browser ghi thẳng = bytes ch�
 
 - [ ] **Step 7: Chạy toàn bộ lần cuối**
 
-Run: `npm test && npx tsc --noEmit && npm run lint && npm run build`
+Run: `npm test && npx tsc --noEmit && npm run build`
 Expected: tất cả PASS.
+
+**KHÔNG chạy `npm run lint`.** Review Task 3 phát hiện script này hỏng từ trước: repo không có
+config ESLint nào, nên `next lint` rơi vào prompt tương tác và treo. Thay vì sửa (nằm ngoài P1b),
+ghi nó vào `CLAUDE.md` như một khoảng trống đã biết: repo hiện **không có tầng lint**, mọi ràng
+buộc phong cách đều do test và review gánh.
 
 - [ ] **Step 8: Commit**
 
