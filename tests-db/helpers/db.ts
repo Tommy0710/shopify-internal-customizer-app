@@ -1,7 +1,8 @@
 import type { Asset, AssetKind, Shop } from "@prisma/client";
 import { db } from "@/lib/db";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+// `new URL()` trả IPv6 kèm ngoặc vuông: hostname của `postgresql://…@[::1]:5432` là "[::1]".
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
  * Xoá sạch dữ liệu giữa các test. Tự kiểm lại host dù `test-db.mjs` đã kiểm:

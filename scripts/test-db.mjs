@@ -16,11 +16,17 @@ import { spawnSync } from "node:child_process";
 import net from "node:net";
 
 const IMAGE = "postgres:16-alpine";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+// `new URL()` trả IPv6 kèm ngoặc vuông: hostname của `postgresql://…@[::1]:5432` là "[::1]".
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: "inherit", ...options });
-  if (result.error) throw result.error;
+  if (result.error) {
+    if (result.error.code === "ENOENT") {
+      throw new Error(`test-db: không tìm thấy lệnh "${command}" — ${command === "docker" ? "cài Docker, hoặc đặt WK_TEST_DATABASE_URL trỏ tới một Postgres cục bộ" : "kiểm tra PATH"}.`);
+    }
+    throw result.error;
+  }
   return result.status ?? 1;
 }
 
