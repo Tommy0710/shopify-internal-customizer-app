@@ -249,9 +249,13 @@ model ProductStyleLeather {
   leatherId      String
   leather        Leather      @relation(fields: [leatherId], references: [id])
 
-  shopifyProductId     String
-  shopifyVariantId     String
-  shopifyVariantGid    String
+  // Nullable: admin gõ và lưu giá (priceInput) TRƯỚC khi bấm Generate variants
+  // (spec §12.2). Postgres cho nhiều NULL dưới @@unique, nên "một variant chỉ
+  // thuộc một cặp" vẫn đúng cho mọi hàng ĐÃ có variant. Storefront chỉ đọc hàng
+  // có shopifyVariantId khác NULL và variantMissing = false.
+  shopifyProductId     String?
+  shopifyVariantId     String?
+  shopifyVariantGid    String?
   variantTitleSnapshot String?
   variantSkuSnapshot   String?
   priceInput           Decimal?  @db.Decimal(10, 2) // giá admin gõ vào lưới, chưa chắc đã sync
@@ -289,9 +293,9 @@ model AnimalLeather {
   leatherId       String
   leather         Leather       @relation(fields: [leatherId], references: [id])
 
-  shopifyProductId     String
-  shopifyVariantId     String
-  shopifyVariantGid    String
+  shopifyProductId     String?
+  shopifyVariantId     String?
+  shopifyVariantGid    String?
   variantTitleSnapshot String?
   priceInput           Decimal?  @db.Decimal(10, 2) // giá admin gõ vào lưới, chưa chắc đã sync
   variantPriceSnapshot Decimal?  @db.Decimal(10, 2) // giá đọc ngược từ Shopify

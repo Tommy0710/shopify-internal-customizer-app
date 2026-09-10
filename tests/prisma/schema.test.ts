@@ -108,6 +108,18 @@ describe("prisma schema", () => {
     }
   });
 
+  // R1 của P2a: admin lưu giá TRƯỚC khi generate variant (spec §12.2), nên hàng
+  // giá phải tồn tại được khi chưa có variant Shopify nào.
+  it.each(["ProductStyleLeather", "AnimalLeather"])(
+    "%s cho phép hàng giá tồn tại trước khi có variant (cột Shopify nullable)",
+    (model) => {
+      const body = modelBody(model);
+      for (const column of ["shopifyProductId", "shopifyVariantId", "shopifyVariantGid"]) {
+        expect(body, `${model}.${column} phải nullable`).toMatch(new RegExp(`\\b${column}\\s+String\\?`));
+      }
+    },
+  );
+
   it("client sinh ra biết mọi model", () => {
     for (const model of EXPECTED_MODELS) {
       expect(Prisma.ModelName, `client chưa generate lại?`).toHaveProperty(model);
