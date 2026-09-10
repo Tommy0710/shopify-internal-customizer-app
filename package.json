@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
-    "@shopify/shopify-api": "^11.5.0",
+    "@shopify/shopify-api": "^14.0.1",
     "clsx": "^2.1.1",
     "jose": "^5.10.0",
     "linkedom": "^0.18.13",
