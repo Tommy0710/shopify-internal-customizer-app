@@ -124,3 +124,6 @@ $RECYCLE.BIN/
 .vercel
 .env*
 supabase/.temp/
+
+# Scratch của quy trình superpowers (ledger, brief, report) — không commit
+.superpowers/

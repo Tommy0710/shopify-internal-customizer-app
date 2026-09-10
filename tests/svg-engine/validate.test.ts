@@ -269,6 +269,13 @@ describe("sanitize then validate", () => {
     // của clipPath — còn lại một clipPath rỗng, cắt sạch artwork. Test của
     // sanitize không bao giờ validate lại, test của validate không bao giờ
     // thấy tài liệu đã sanitize, nên không bên nào bắt được.
+    //
+    // Test này TỪNG khẳng định `validateSvgContract(root).valid === true` ở
+    // dòng đầu — và chính khẳng định đó là lỗ hổng tương đương mà bản vá
+    // `foreignUseTarget` đóng lại: validator gọi tài liệu này hợp lệ trong khi
+    // sanitize gỡ một phần tử khỏi nó. Giờ validator từ chối ngay ở `safety`.
+    // Phần còn lại của test giữ nguyên vai trò: sau khi sanitize, clipPath
+    // rỗng phải bị bắt bằng một check KHÁC.
     const root = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview">
       <path id="wallet-body-shape" d="M0 0h10v10H0z"/>
       <path id="animal-shape" d="M2 2h4v4H2z"/>
@@ -279,13 +286,17 @@ describe("sanitize then validate", () => {
       <g id="stitches" fill="var(--wallet-stitches)"></g>
     </svg>`);
 
-    expect(validateSvgContract(root).valid).toBe(true);
+    const before = validateSvgContract(root);
+    expect(before.valid).toBe(false);
+    expect(statusOf(before, "safety")).toBe("unsafe");
+    expect(statusOf(before, "wallet-body-clip/contents")).toBe("ok");
 
     const report = sanitizeSvgRoot(root);
     expect(report.removedElements).toContain("use");
 
     const after = validateSvgContract(root);
     expect(after.valid).toBe(false);
+    expect(statusOf(after, "safety")).toBe("ok");
     expect(statusOf(after, "wallet-body-clip/contents")).toBe("empty");
   });
 
@@ -338,10 +349,60 @@ describe("checkSafety means 'sanitize would remove nothing' — non-element node
     expect(report.valid).toBe(false);
   });
 
+  it("rejects a CDATA section", () => {
+    // linkedom coi <title> trong SVG là RCDATA và không cài luật CDATA của nội
+    // dung foreign, nên CDATA này parse lại thành một <script> sống.
+    const report = validateSvgContract(
+      parseSvg(contract(`<title><![CDATA[</title><script>alert(1)</script>]]></title>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(report.valid).toBe(false);
+    expect(report.checks.find((check) => check.id === "safety")?.hint).toContain("#cdata-section");
+  });
+
+  it("rejects a <use> that points at another document", () => {
+    // `isAllowedUrlValue("https://…")` trả true một cách chính đáng — texture
+    // da hợp lệ LÀ URL ngoài — nên vòng kiểm tra URL không bao giờ bắt được
+    // cái này. Trước bản vá: `safety: ok`, `valid: true`, trong khi
+    // sanitizeSvgRoot gỡ phần tử đó.
+    const report = validateSvgContract(
+      parseSvg(contract(`<use href="https://evil.example/x.svg#a"/>${SOUND_BODY}`)),
+    );
+    expect(statusOf(report, "safety")).toBe("unsafe");
+    expect(report.valid).toBe(false);
+    expect(report.checks.find((check) => check.id === "safety")?.hint).toContain(
+      `<use href="https://evil.example/x.svg#a">`,
+    );
+  });
+
+  it("still accepts an https: texture on <image> — one character from the case above", () => {
+    const report = validateSvgContract(
+      parseSvg(
+        contract(
+          SOUND_BODY.replace(
+            `<image id="body-artwork"`,
+            `<image id="body-artwork" href="https://cdn.example/leather.webp"`,
+          ),
+        ),
+      ),
+    );
+    expect(statusOf(report, "safety")).toBe("ok");
+    expect(report.valid).toBe(true);
+  });
+
   it.each([
     ["a comment", `<!--x-->${SOUND_BODY}`],
     ["a nested comment", `<g><!--x--></g>${SOUND_BODY}`],
+    ["a CDATA section", `<title><![CDATA[</title><script>alert(1)</script>]]></title>${SOUND_BODY}`],
     ["a URL( external beacon", `<rect style="background-image:URL(http://evil.example/b.png)"/>${SOUND_BODY}`],
+    ["a <use> pointing off-document", `<use href="https://evil.example/x.svg#a"/>${SOUND_BODY}`],
+    ["an xlink:href <use> pointing off-document", `<use xlink:href="https://evil.example/x.svg#a"/>${SOUND_BODY}`],
+    [
+      "an https: texture on <image>",
+      SOUND_BODY.replace(`<image id="body-artwork"`, `<image id="body-artwork" href="https://cdn.example/leather.webp"`),
+    ],
+    ["an https: texture inside url()", `<rect style="fill:URL(https://cdn.example/t.webp)"/>${SOUND_BODY}`],
+    ["a same-document <use>", `<use href="#animal-shape"/>${SOUND_BODY}`],
     ["a clean document", SOUND_BODY],
   ])("agrees with sanitizeSvgRoot about %s", (_label, body) => {
     const source = contract(body);

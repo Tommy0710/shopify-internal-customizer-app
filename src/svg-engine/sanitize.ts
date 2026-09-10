@@ -3,22 +3,26 @@ import {
   ALLOWED_ELEMENTS,
   HREF_ATTRIBUTES,
   extractUrlReferences,
+  foreignUseTarget,
   isAllowedUrlValue,
   isExternalUrlValue,
-  normalizeUrlForSchemeCheck,
   unsafeNodeName,
 } from "./policy";
 
 export interface SanitizeReport {
   /**
    * localName của các phần tử đã bị gỡ, cộng `nodeName` của các node không phải
-   * phần tử đã bị gỡ (`#comment`, `#processing-instruction`).
+   * phần tử đã bị gỡ (`#comment`, `#processing-instruction`, `#cdata-section`).
    *
    * Chúng nằm chung một trường có chủ đích: câu hỏi mà mọi caller thực sự hỏi
    * là "sanitize có gỡ gì không", và đó phải là một câu hỏi trả lời được bằng
    * hai trường này — đúng bằng khẳng định mà `checkSafety` trong `./validate`
-   * mirror. Một trường thứ ba sẽ là thứ mà một caller quên kiểm tra. `#` không
-   * phải ký tự mở đầu hợp lệ của tên XML nên không có va chạm.
+   * mirror. Một trường thứ ba sẽ là thứ mà một caller quên kiểm tra.
+   *
+   * Tên ở đây không bảo đảm duy nhất: `<#comment/>` parse được và cho
+   * `localName === "#comment"`, nên nó ghi ra cùng chuỗi với một node comment
+   * bị gỡ. Không ai đọc trường này để phân biệt hai thứ đó — cả hai đều nghĩa
+   * là "có thứ gì đó đã bị gỡ".
    */
   removedElements: string[];
   /** "localName@attributeName" của các thuộc tính đã bị gỡ */
@@ -66,15 +70,12 @@ function visit(element: Element, report: SanitizeReport): void {
   }
 
   // <use> trỏ sang tài liệu khác kéo nội dung ngoài vào cây — luôn gỡ, kể cả
-  // khi scheme của nó (https:) hợp lệ cho một texture.
-  if (element.localName.toLowerCase() === "use") {
-    const target = element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? "";
-    const normalized = normalizeUrlForSchemeCheck(target);
-    if (normalized !== "" && !normalized.startsWith("#")) {
-      report.removedElements.push(element.localName);
-      element.parentNode?.removeChild(element);
-      return;
-    }
+  // khi scheme của nó (https:) hợp lệ cho một texture. Quy tắc nằm ở
+  // `foreignUseTarget` trong `./policy` vì `checkSafety` phải đọc ĐÚNG nó.
+  if (foreignUseTarget(element) !== null) {
+    report.removedElements.push(element.localName);
+    element.parentNode?.removeChild(element);
+    return;
   }
 
   sanitizeAttributes(element, report);

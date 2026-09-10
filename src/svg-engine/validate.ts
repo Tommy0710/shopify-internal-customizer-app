@@ -12,6 +12,7 @@ import {
   ALLOWED_ELEMENTS,
   HREF_ATTRIBUTES,
   extractUrlReferences,
+  foreignUseTarget,
   fragmentIdOf,
   isAllowedUrlValue,
   unsafeNodeName,
@@ -151,10 +152,16 @@ function checkReferences(root: Element, elements: Element[]): ContractCheck {
  * Đây là CỔNG THỨ HAI, độc lập với sanitize: nếu sanitize có lỗ thì tài liệu
  * vẫn phải bị chặn ở đây trước khi hiển thị hoặc bake. Cả hai dùng chung
  * allowlist trong `./policy`, nên đúng một định nghĩa "an toàn" tồn tại — và
- * check này tương đương câu "sanitize sẽ không gỡ gì khỏi tài liệu này". Sự
- * tương đương đó phải đúng cho CẢ node không phải phần tử, nếu không nó chỉ là
- * một khẩu hiệu: comment và processing instruction bị sanitize gỡ, nên chúng
- * cũng phải bị từ chối ở đây.
+ * check này tương đương câu "sanitize sẽ không gỡ gì khỏi tài liệu này".
+ *
+ * Sự tương đương đó là một khẳng định phải KIỂM CHỨNG ĐƯỢC, không phải một
+ * khẩu hiệu, và nó đã hỏng hai lần theo cùng một kiểu: một luật chỉ tồn tại
+ * bên phía sanitize. Lần một là node không phải phần tử (comment, PI, CDATA);
+ * lần hai là `<use>` trỏ ra ngoài tài liệu. Mỗi luật giờ nằm trong `./policy`
+ * và được ĐỌC từ đó ở cả hai bên, và
+ * `tests/svg-engine/validate.test.ts` có bảng khẳng định
+ * `safety === "unsafe"` KHI VÀ CHỈ KHI sanitize gỡ thứ gì đó. Thêm luật mới
+ * vào một bên mà không thêm vào bảng đó là cách con bug này quay lại.
  *
  * URL `https:` ngoài KHÔNG bị coi là không tin cậy ở tầng này: texture da hợp
  * lệ là URL ngoài, và bản đã bake luôn chứa hai cái. Việc lọc theo host là
@@ -166,6 +173,16 @@ function checkSafety(elements: Element[]): ContractCheck {
   for (const element of elements) {
     if (!ALLOWED_ELEMENTS.has(element.localName.toLowerCase())) {
       offenders.push(`<${element.localName}>`);
+      continue;
+    }
+    // `<use>` trỏ ra ngoài tài liệu. `isAllowedUrlValue("https://…")` trả true
+    // một cách chính đáng — texture da hợp lệ LÀ một URL ngoài — nên vòng URL
+    // bên dưới không bao giờ bắt được nó, và trước bản vá này một
+    // `<use href="https://evil.example/x.svg#a">` đi qua với `safety: ok`
+    // trong khi sanitize gỡ nó. Cùng một quy tắc, đọc từ cùng một chỗ.
+    const foreignUse = foreignUseTarget(element);
+    if (foreignUse !== null) {
+      offenders.push(`<use href="${foreignUse.slice(0, 40)}">`);
       continue;
     }
     // Node không phải phần tử. `elements` chỉ chứa phần tử, nhưng mọi node khác

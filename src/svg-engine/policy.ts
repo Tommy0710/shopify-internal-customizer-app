@@ -259,6 +259,7 @@ export const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
 ]);
 
 /** Hằng số `Node.*_NODE`, viết tay vì engine không được phụ thuộc vào global DOM nào. */
+const CDATA_SECTION_NODE = 4;
 const PROCESSING_INSTRUCTION_NODE = 7;
 const COMMENT_NODE = 8;
 
@@ -278,18 +279,30 @@ const COMMENT_NODE = 8;
  * thành *bogus comment* kết thúc ở dấu `>` ĐẦU TIÊN, nên `<?x ><script>…` cũng
  * mở ra một phần tử thật.
  *
- * CDATA cố tình KHÔNG nằm đây: dữ liệu của một node CDATA không bao giờ chứa
- * được `]]>` (đó chính là điều kiện để nó là một node), và trong HTML nội dung
- * foreign cũng đóng CDATA ở đúng `]]>` — không có cách nào thoát ra. Nó là
- * text, và text được serializer escape.
+ * CDATA cũng nằm đây, và lý do đáng ghi lại vì lập luận đầu tiên đã SAI. Lập
+ * luận đó là: dữ liệu của một node CDATA không bao giờ chứa được `]]>`, và
+ * trong nội dung foreign của HTML thì CDATA cũng đóng ở đúng `]]>`, nên không
+ * thoát ra được. Vế sau chỉ đúng với parser ĐÚNG CHUẨN. Đo trên chính parser
+ * repo này đang ship (linkedom): nó không cài luật CDATA của nội dung foreign
+ * và coi `<title>` trong SVG là RCDATA, nên
+ * `<title><![CDATA[</title><script>alert(1)</script>]]></title>` được lưu
+ * nguyên văn rồi parse lại thành một `<script>alert(1)</script>` SỐNG.
  *
- * Tên trả về là `nodeName` chuẩn của DOM cho hai loại node này. `#` không phải
- * ký tự mở đầu hợp lệ của tên XML, nên chúng không bao giờ đụng tên một phần
- * tử trong `SanitizeReport.removedElements`.
+ * Nói cách khác, giữ CDATA lại là đặt an toàn của cổng này lên giả định "mọi
+ * bộ xử lý phía sau đều đúng chuẩn". Đó không phải giả định được phép mang tải
+ * trong một sanitizer, và CDATA không mang nội dung hợp lệ nào trong mockup —
+ * không fixture nào có, nên gỡ nó không mất gì.
+ *
+ * Tên trả về là `nodeName` chuẩn của DOM cho ba loại node này. Nó KHÔNG bảo
+ * đảm là duy nhất: `<#comment/>` parse được dưới `image/svg+xml` của linkedom
+ * và cho `localName === "#comment"`, nên một phần tử tên như vậy bị gỡ sẽ ghi
+ * ra cùng một chuỗi. Hệ quả chỉ nằm ở độ trung thực của báo cáo — cả hai cách
+ * đọc đều có nghĩa "có thứ gì đó đã bị gỡ" — chứ không ở quyết định gỡ.
  */
 export function unsafeNodeName(node: { nodeType: number }): string | null {
   if (node.nodeType === COMMENT_NODE) return "#comment";
   if (node.nodeType === PROCESSING_INSTRUCTION_NODE) return "#processing-instruction";
+  if (node.nodeType === CDATA_SECTION_NODE) return "#cdata-section";
   return null;
 }
 
@@ -325,6 +338,31 @@ export function isAllowedUrlValue(value: string): boolean {
   if (/^https:\/\//i.test(normalized)) return true;
   if (/^data:image\//i.test(normalized)) return true;
   return false;
+}
+
+/**
+ * Giá trị href của một `<use>` trỏ ra NGOÀI tài liệu, hoặc `null` khi phần tử
+ * không phải `<use>`, hoặc là `<use>` nhưng trỏ trong tài liệu.
+ *
+ * Vì sao `<use>` là ngoại lệ của "https: thì được": mọi chỗ khác, một URL
+ * `https:` chỉ nạp một ẢNH (texture da hợp lệ chính là một cái). Trên `<use>`
+ * nó kéo NỘI DUNG của tài liệu khác vào thẳng cây — phần tử, thuộc tính, bất
+ * cứ thứ gì bên đó có — sau khi sanitize đã chạy xong. Nên `<image href>` và
+ * `<use href>` phải đi hai đường dù chỉ khác nhau một chữ.
+ *
+ * Sống ở đây chứ không ở `sanitize.ts` vì `checkSafety` cần ĐÚNG quy tắc này:
+ * nếu không, một `<use href="https://…">` đi qua validator với `safety: ok`
+ * trong khi sanitize gỡ nó — đúng hình dạng của lỗi K, và đúng lý do K4 sống
+ * sót được lâu như vậy.
+ */
+export function foreignUseTarget(element: {
+  localName: string;
+  getAttribute(name: string): string | null;
+}): string | null {
+  if (element.localName.toLowerCase() !== "use") return null;
+  const target = element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? "";
+  const normalized = normalizeUrlForSchemeCheck(target);
+  return normalized !== "" && !normalized.startsWith("#") ? target : null;
 }
 
 /** URL ngoài hợp lệ — texture da thật chính là một cái. Caller tự áp allowlist host. */

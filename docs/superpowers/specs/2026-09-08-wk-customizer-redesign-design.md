@@ -1156,6 +1156,18 @@ là một ký tự thật.
 
 ---
 
+### ⚠️ Ràng buộc cho phase dựng upload endpoint
+
+`sanitizeSvgRoot(root)` chỉ nhìn thấy **cây con của root**. Một comment đặt **trước** thẻ `<svg>`
+sống sót trong `root.ownerDocument` dù `root.outerHTML` đã sạch.
+
+**Endpoint upload phải lưu `root.outerHTML` sau khi sanitize — tuyệt đối không lưu bytes gốc do
+người dùng tải lên.** Lưu bytes gốc là bypass toàn bộ sanitizer.
+
+Hôm nay chưa có consumer nào nên chưa có phơi nhiễm; ghi ở đây để phase dựng endpoint đọc được.
+
+---
+
 ## 16. Điểm còn mở (không chặn triển khai)
 
 1. **Số lượng leather thực tế** → quyết định bộ sinh tạo 1 hay N product. Trả lời lúc nào cũng được; admin hiện con số trước khi generate.

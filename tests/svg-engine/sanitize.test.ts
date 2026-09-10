@@ -1,3 +1,4 @@
+import { parseHTML } from "linkedom";
 import { describe, expect, it } from "vitest";
 import { sanitizeSvgRoot } from "@/svg-engine/sanitize";
 import { parseSvg } from "../helpers/svgDom";
@@ -337,5 +338,29 @@ describe("sanitizeSvgRoot url( is case-insensitive", () => {
     const report = sanitizeSvgRoot(root);
     expect(report).toEqual({ removedElements: [], removedAttributes: [], externalRefs: [] });
     expect(root.querySelector('[id="t"]')!.getAttribute("fill")).toBe("url(#grad)");
+  });
+});
+
+describe("sanitizeSvgRoot CDATA", () => {
+  // Lập luận đầu tiên để GIỮ CDATA là "dữ liệu của nó không bao giờ chứa được
+  // `]]>` nên không thoát ra được ở parser nào". Vế sau chỉ đúng với parser
+  // ĐÚNG CHUẨN. linkedom — parser repo này đang ship — không cài luật CDATA của
+  // nội dung foreign và coi <title> trong SVG là RCDATA, nên `</title>` bên
+  // trong CDATA đóng thẻ và phần còn lại thành markup thật.
+  const PAYLOAD = `<svg xmlns="http://www.w3.org/2000/svg" id="wallet-preview"><title><![CDATA[</title><script>alert(1)</script>]]></title></svg>`;
+
+  it("removes a CDATA section and names it", () => {
+    const root = parseSvg(PAYLOAD);
+    const report = sanitizeSvgRoot(root);
+    expect(report.removedElements).toEqual(["#cdata-section"]);
+    expect(root.outerHTML).not.toContain("CDATA");
+    expect(root.outerHTML).not.toContain("alert(1)");
+  });
+
+  it("leaves nothing an HTML parser can turn back into a script", () => {
+    const root = parseSvg(PAYLOAD);
+    sanitizeSvgRoot(root);
+    const { document } = parseHTML(`<!doctype html><body><div>${root.outerHTML}</div>`);
+    expect(Array.from(document.querySelectorAll("script"))).toEqual([]);
   });
 });
