@@ -123,7 +123,7 @@ model Stitch {
   name                String
   slug                String
   displayImageAssetId String?
-  displayImage        Asset?    @relation("StitchDisplayImage", fields: [displayImageAssetId], references: [id])
+  displayImage        Asset?    @relation("StitchDisplayImage", fields: [displayImageAssetId], references: [id], onDelete: Restrict)
   colorHex            String // ^#[0-9A-F]{6}$ — chuẩn hoá lúc ghi
   isActive            Boolean   @default(true)
   sortOrder           Int       @default(0)
@@ -213,7 +213,12 @@ model ProductHost {
   handleSnapshot    String?
   titleSnapshot     String?
   preselectStyleId  String? // khi đóng gói 1 product mỗi style
-  preselectStyle    Style?              @relation("ProductHostPreselectStyle", fields: [preselectStyleId], references: [id])
+  // Quan hệ optional nhưng vẫn Restrict, KHÔNG để mặc định SetNull: attribute không bao giờ
+  // hard-delete (spec §7.3). Nếu SetNull, một Style chỉ còn host này tham chiếu sẽ xoá được,
+  // preselectStyleId âm thầm thành NULL và trang product thôi preselect mà không báo gì.
+  // "Bỏ chọn" hợp lệ vẫn là một UPDATE thường vì cột nullable. Áp cùng lý do cho mọi quan hệ
+  // optional trong file — tests/prisma/schema.test.ts giữ luật này.
+  preselectStyle    Style?              @relation("ProductHostPreselectStyle", fields: [preselectStyleId], references: [id], onDelete: Restrict)
   isPrimary         Boolean             @default(false)
   syncedAt          DateTime?
 
@@ -313,7 +318,7 @@ model ProductStyleAnimal {
   svgAssetId      String
   svgAsset        Asset        @relation("StyleAnimalSvg", fields: [svgAssetId], references: [id])
   defaultStitchId String?
-  defaultStitch   Stitch?      @relation("StyleAnimalDefaultStitch", fields: [defaultStitchId], references: [id])
+  defaultStitch   Stitch?      @relation("StyleAnimalDefaultStitch", fields: [defaultStitchId], references: [id], onDelete: Restrict)
   isActive        Boolean      @default(true)
   sortOrder       Int          @default(0)
   createdAt       DateTime     @default(now())

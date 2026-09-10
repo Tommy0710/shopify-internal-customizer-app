@@ -92,6 +92,22 @@ describe("prisma schema", () => {
     expect(body).toMatch(/variantPriceSnapshot\s+Decimal\?\s+@db\.Decimal\(10,\s*2\)/);
   });
 
+  // Quan hệ optional mặc định là `onDelete: SetNull` — sai với chính sách §7.3
+  // (attribute không bao giờ hard-delete). Ví dụ: một Style chỉ còn ProductHost
+  // tham chiếu sẽ xoá được, `preselectStyleId` âm thầm thành NULL, và trang
+  // product thôi preselect mà không ai hay. Mọi quan hệ optional phải khai
+  // `onDelete: Restrict` tường minh; cột vẫn nullable nên "bỏ chọn" vẫn là UPDATE.
+  it("mọi quan hệ optional khai onDelete: Restrict, không quan hệ nào SetNull", () => {
+    expect(SCHEMA).not.toMatch(/onDelete:\s*SetNull/);
+    const optionalRelations = SCHEMA.split("\n").filter((line) =>
+      /^\s*\w+\s+\w+\?\s+@relation\(.*fields:/.test(line),
+    );
+    expect(optionalRelations.length, "không tìm thấy quan hệ optional nào — regex hỏng?").toBeGreaterThan(0);
+    for (const line of optionalRelations) {
+      expect(line.trim(), "quan hệ optional thiếu onDelete: Restrict").toMatch(/onDelete:\s*Restrict/);
+    }
+  });
+
   it("client sinh ra biết mọi model", () => {
     for (const model of EXPECTED_MODELS) {
       expect(Prisma.ModelName, `client chưa generate lại?`).toHaveProperty(model);
