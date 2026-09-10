@@ -13,9 +13,11 @@ const httpsUrl = z.string().url().startsWith("https://");
 const productSchema = z.object({
   id: z.string(),
   name: z.string(),
-  // Chỉ có mặt khi ProductHost mang preselectStyleId (đóng gói N-product) —
-  // đóng gói 1-product không có trường này.
-  preselectStyleId: z.string().optional(),
+  // Chỉ có giá trị khi ProductHost mang preselectStyleId (đóng gói N-product).
+  // Đóng gói 1-product: cột NULL trong DB, đến đây là `null` qua JSON.
+  // `.nullish()` ở đây và bên dưới = khớp đúng cột nullable trong prisma/schema.prisma;
+  // tests/shared/customizerConfig.test.ts khẳng định từng trường.
+  preselectStyleId: z.string().nullish(),
 });
 
 const leatherSchema = z.object({
@@ -31,7 +33,8 @@ const stitchSchema = z.object({
   id: z.string(),
   name: z.string(),
   colorHex: hexColor,
-  displayImageUrl: httpsUrl,
+  // Stitch.displayImageAssetId nullable — không có ảnh thì widget vẽ chấm màu từ colorHex.
+  displayImageUrl: httpsUrl.nullish(),
 });
 
 /** Tham chiếu leather trong style/animal — mang theo variantId để client tra giá qua wk-variants. */
@@ -43,12 +46,15 @@ const leatherVariantRefSchema = z.object({
 const styleAnimalSchema = z.object({
   id: z.string(),
   animalId: z.string(),
+  // Bắt buộc có chủ đích dù cột displayLabel nullable: server điền
+  // `displayLabel ?? animal.name`, để widget không phải tự fallback.
   label: z.string(),
-  description: z.string(),
+  description: z.string().nullish(),
   displayImageUrl: httpsUrl,
   // Bắt buộc: không có SVG thì không tô màu được animal appliqué lên preview.
   svgUrl: httpsUrl,
-  defaultStitchId: z.string(),
+  // Null = không có mặc định riêng cho tổ hợp này; widget dùng stitch đầu tiên.
+  defaultStitchId: z.string().nullish(),
 });
 
 const styleSchema = z.object({

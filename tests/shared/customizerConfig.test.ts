@@ -161,3 +161,38 @@ describe("customizerConfigSchema", () => {
     }
   });
 });
+
+// Hợp đồng phải nhận đúng thứ DB sinh ra được. Các cột này nullable trong
+// prisma/schema.prisma; server serialize qua JSON nên chúng đến dưới dạng
+// `null`, không phải vắng mặt. Từ chối null ở đây nghĩa là một stitch lưu
+// không kèm ảnh làm sập customizer trên MỌI trang host product đó.
+describe("customizerConfigSchema — cột DB nullable đến dưới dạng null", () => {
+  const viaJson = (value: unknown) => JSON.parse(JSON.stringify(value));
+
+  it.each([
+    ["product.preselectStyleId (ProductHost, đóng gói 1-product)", (c: any) => { c.product.preselectStyleId = null; }],
+    ["stitches[].displayImageUrl (Stitch.displayImageAssetId)", (c: any) => { c.stitches[0].displayImageUrl = null; }],
+    ["styles[].animals[].defaultStitchId (ProductStyleAnimal)", (c: any) => { c.styles[0].animals[0].defaultStitchId = null; }],
+    ["styles[].animals[].description (ProductStyleAnimal)", (c: any) => { c.styles[0].animals[0].description = null; }],
+  ])("nhận null ở %s", (_label, mutate) => {
+    const config = viaJson(validConfig());
+    mutate(config);
+    const result = customizerConfigSchema.safeParse(viaJson(config));
+    expect(result.success, JSON.stringify(result.error?.issues)).toBe(true);
+  });
+
+  // `label` KHÔNG nullish có chủ đích: server phải điền `displayLabel ?? animal.name`.
+  // Widget luôn cần một nhãn để hiển thị; đẩy fallback về một chỗ (server) thay vì
+  // bắt mọi widget tự xử lý.
+  it("label vẫn bắt buộc — server chịu trách nhiệm fallback về tên animal", () => {
+    const config = viaJson(validConfig());
+    config.styles[0].animals[0].label = null;
+    expect(customizerConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  it("các trường bắt buộc trong DB vẫn không nhận null", () => {
+    const config = viaJson(validConfig());
+    config.leathers[0].textureImageUrl = null;
+    expect(customizerConfigSchema.safeParse(config).success).toBe(false);
+  });
+});
