@@ -391,7 +391,11 @@ describe("uploadBinaryAsset", () => {
 });
 
 describe("uploadSanitizedSvg", () => {
-  const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg>';
+  // Dạng CHUẨN — đúng như `root.outerHTML` của linkedom sinh ra (`<path … />`
+  // có dấu cách trước `/>`). Từ fix nội-dung-sau-</svg>, module chỉ nhận chuỗi
+  // mà parse lại cho ra đúng chính nó, nên test phải dùng dạng caller thật sẽ
+  // đưa vào, không phải một chuỗi gõ tay "trông giống".
+  const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10H0z" /></svg>';
 
   it("upload với contentType image/svg+xml và cacheControl dài (bất biến theo checksum)", async () => {
     const { client, calls } = createFakeClient();
@@ -457,10 +461,10 @@ describe("uploadSanitizedSvg", () => {
     ).rejects.toThrow();
   });
 
-  it("chấp nhận <svg> không thuộc tính, <svg xmlns=…>, và <svg/> tự đóng", async () => {
+  it("chấp nhận <svg /> không thuộc tính, <svg xmlns=…>, và <svg … /> tự đóng (dạng chuẩn của outerHTML)", async () => {
     const { client: client1 } = createFakeClient();
     await expect(
-      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg: "<svg></svg>", client: client1 }),
+      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg: "<svg />", client: client1 }),
     ).resolves.toBeDefined();
 
     const { client: client2 } = createFakeClient();
@@ -472,7 +476,7 @@ describe("uploadSanitizedSvg", () => {
     await expect(
       uploadSanitizedSvg({
         kind: "SVG_MOCKUP" as AssetKind,
-        svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" />',
         client: client3,
       }),
     ).resolves.toBeDefined();
@@ -618,6 +622,45 @@ describe("uploadSanitizedSvg", () => {
       }),
     ).rejects.toThrow(/chưa qua sanitizeSvgRoot/);
   });
+
+  // --- Nội dung SAU </svg>: lọt cả hai lưới cũ ---------------------------------
+  // Kiểm raw-bytes chỉ nhìn phần ĐẦU chuỗi; verifier chỉ thấy cây con của root.
+  // Parser bỏ qua mọi thứ sau thẻ đóng của root, nên sanitize lần hai không bao
+  // giờ thấy phần đuôi — nhưng chuỗi được upload NGUYÊN VĂN, kể cả phần đuôi.
+  // Hàng rào: parse lại phải ra đúng chính chuỗi đó (`root.outerHTML` là hợp đồng).
+
+  const HEAD = '<svg xmlns="http://www.w3.org/2000/svg"><rect /></svg>';
+
+  it.each([
+    ["<iframe> javascript:", `${HEAD}<iframe src="javascript:alert(1)">`],
+    ["<a href=\"javascript:\">", `${HEAD}<a href="javascript:alert(1)">x</a>`],
+    ["<style>", `${HEAD}<style>@import url(https://evil.example/x.css);</style>`],
+    ["<meta http-equiv=refresh>", `${HEAD}<meta http-equiv="refresh" content="0;url=https://evil.example">`],
+    ["processing instruction", `${HEAD}<?xml-stylesheet href="https://evil.example/x.css"?>`],
+    ["thẻ <svg> anh em thứ hai", `${HEAD}<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect /></a></svg>`],
+  ])("từ chối nội dung sau </svg>: %s", async (_label, svg) => {
+    const { client, calls } = createFakeClient();
+    await expect(
+      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg, client }),
+    ).rejects.toThrow(/không khớp root\.outerHTML/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("từ chối chuỗi gõ tay không phải dạng chuẩn của root.outerHTML (<svg></svg> thay vì <svg />)", async () => {
+    const { client, calls } = createFakeClient();
+    await expect(
+      uploadSanitizedSvg({ kind: "SVG_MOCKUP" as AssetKind, svg: "<svg></svg>", client }),
+    ).rejects.toThrow(/không khớp root\.outerHTML/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(["crocodile.svg", "angler-fish.svg"])(
+    "fixture %s: root.outerHTML sau parse+sanitize round-trip đúng từng byte (serialize idempotent)",
+    (name) => {
+      const outerHtml = sanitizedOuterHtml(loadFixture(name));
+      expect(parseSvgFromText(outerHtml).outerHTML).toBe(outerHtml);
+    },
+  );
 
   // --- Hai fixture thật của dự án: đặc tả của "input hợp lệ trông như thế nào" ---
 

@@ -12,7 +12,9 @@ import { sanitizeSvgRoot } from "@/svg-engine";
  * `sanitizeSvgRoot(root)` chỉ nhìn thấy cây con của root; một comment đặt TRƯỚC
  * thẻ <svg> sống sót trong `root.ownerDocument` dù `root.outerHTML` đã sạch.
  * Nên hợp đồng là: caller parse, sanitize, rồi đưa `root.outerHTML` vào đây.
- * `uploadSanitizedSvg` ném lỗi với bất cứ chuỗi nào trông như bytes gốc.
+ * `uploadSanitizedSvg` ném lỗi với bất cứ chuỗi nào trông như bytes gốc, và với
+ * bất cứ chuỗi nào parse lại KHÔNG ra đúng chính nó (nội dung sau `</svg>`,
+ * hoặc chuỗi gõ tay không phải do `root.outerHTML` sinh ra).
  *
  * Ruling ban đầu cấm import sanitizer vào module này (giữ nó "chỉ ở tầng
  * caller"). Ruling đó được sửa lại sau review fix-round 1: import
@@ -327,12 +329,33 @@ function assertNoRawSvgBytes(svg: string): void {
  */
 function assertGenuinelySanitized(svg: string): void {
   const root = parseSvgFromText(svg);
+  // Chụp serialize TRƯỚC khi sanitize: `sanitizeSvgRoot` sửa cây tại chỗ, và
+  // phép so round-trip bên dưới phải so với cây đúng như parser đọc ra.
+  const reserialized = root.outerHTML;
   const report = sanitizeSvgRoot(root);
   if (report.removedElements.length > 0 || report.removedAttributes.length > 0) {
     throw new Error(
       "uploadSanitizedSvg: chuỗi chưa qua sanitizeSvgRoot() — sanitize lần hai (chỉ để kiểm tra, không dùng để " +
         `lưu) vẫn gỡ ra elements=[${report.removedElements.join(", ")}] attributes=[${report.removedAttributes.join(", ")}]. ` +
         "Gọi sanitizeSvgRoot() trên chính root rồi mới truyền root.outerHTML vào đây.",
+    );
+  }
+
+  // Hàng rào round-trip: parser DỪNG ở thẻ đóng của root, nên mọi thứ sau
+  // `</svg>` (`<iframe>`, `<a href="javascript:">`, `<style>`, `<meta
+  // http-equiv=refresh>`, processing instruction, một `<svg>` anh em thứ hai…)
+  // không bao giờ vào cây — sanitize lần hai ở trên không thấy chúng, nhưng
+  // chuỗi được upload NGUYÊN VĂN, kể cả phần đuôi đó. Hợp đồng của module là
+  // "chỉ nhận `root.outerHTML`", và `root.outerHTML` luôn parse lại ra đúng
+  // chính nó (đã kiểm trên cả hai fixture thật: angler-fish, crocodile). Nên
+  // chuỗi nào parse lại KHÔNG ra đúng chính nó thì không phải `root.outerHTML`
+  // — từ chối, kể cả khi phần khác biệt chỉ là cách viết (`<svg></svg>` thay
+  // vì `<svg />`): caller gõ tay chuỗi là caller đã rời hợp đồng.
+  if (reserialized !== svg.trim()) {
+    throw new Error(
+      "uploadSanitizedSvg: chuỗi không khớp root.outerHTML của chính nó khi parse lại — có nội dung nằm ngoài " +
+        "thẻ <svg> gốc (sau </svg>), hoặc chuỗi không phải do root.outerHTML sinh ra. " +
+        "Caller phải parse, gọi sanitizeSvgRoot(), rồi truyền nguyên root.outerHTML.",
     );
   }
 }
