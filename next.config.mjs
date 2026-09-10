@@ -16,7 +16,11 @@ const nextConfig = {
         headers: [embeddedAdminCsp],
       },
       {
-        // The older /admin/* route tree renders the same screens.
+        // src/app/admin/* was deleted in P1b (schema it depended on is gone;
+        // P2 rebuilds the embedded admin at "/"). This rule is inert today —
+        // nothing is served under /admin/* — kept in case that path is ever
+        // reused, so the CSP isn't the thing standing between then and a
+        // blank iframe.
         source: "/admin/:path*",
         headers: [embeddedAdminCsp],
       },

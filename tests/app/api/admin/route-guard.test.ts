@@ -3,14 +3,27 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Guard `/api/admin/*` là prologue chép tay ở đầu mỗi handler — không có gì ở
- * tầng type hay lint ép nó phải có mặt. Bản trước kiểm hai route gọi đích danh;
- * P2 sẽ thêm khoảng 30 route nữa và một danh sách viết tay chắc chắn lạc hậu.
+ * `withAdminSession` (`src/lib/auth/withAdminSession.ts`) là cách DUY NHẤT
+ * được phép viết handler `/api/admin/*`. Bản trước của bộ quét này chấp nhận
+ * một prologue chép tay — gọi `requireAdminSession(req)` rồi tự `if
+ * ("response" in auth) return auth.response;`. Vấn đề: `requireAdminSession`
+ * không throw, nó trả `{ session } | { response }`, nên một handler gọi hàm
+ * đó và BỎ kết quả (`await requireAdminSession(req);` rồi đi tiếp) biên dịch
+ * sạch và qua được bộ đếm cũ — request lọt không xác thực. Một probe thật đã
+ * xác nhận: scanner cũ báo pass, route trả 200 không cần Authorization header.
  *
- * Bản này quét thư mục. Giới hạn đã biết: nó đếm lời gọi chứ không phân tích cú
- * pháp, nên một file có 2 handler và 2 lời gọi `requireAdminSession` nằm cả trong
- * một handler sẽ lọt. Đổi lại nó bắt được đúng lỗi hay xảy ra nhất — thêm handler
- * mới mà quên guard — và không bao giờ lạc hậu.
+ * Bộ quét này không còn cố phát hiện một prologue tự do đúng hình dạng — nó
+ * ép một hợp đồng chính xác: mọi handler HTTP export trong `route.ts` dưới
+ * `src/app/api/admin/` phải được GÁN trực tiếp từ một lời gọi
+ * `withAdminSession(`. Không có hợp đồng nào khác được coi là hợp lệ, kể cả
+ * gọi `requireAdminSession` trực tiếp — đúng nhưng không qua wrapper vẫn đỏ,
+ * có chủ ý.
+ *
+ * Giới hạn đã biết: đây vẫn là quét văn bản, không phân tích cú pháp thật.
+ * `export const GET = withAdminSession(...)` là hình dạng bắt buộc; nếu ai đó
+ * viết `export async function GET(req) { return withAdminSession(inner)(req); }`
+ * (gọi wrapper bên trong thân hàm thay vì gán trực tiếp) sẽ bị báo đỏ dù đúng
+ * — chấp nhận được, vì đó không phải hình dạng route P2 dự định dùng.
  */
 
 const ADMIN_API = fileURLToPath(new URL("../../../../src/app/api/admin/", import.meta.url));
@@ -38,32 +51,56 @@ export function exportedHandlers(source: string): string[] {
 }
 
 /**
- * Số lời GỌI `requireAdminSession(` trong một file route.
+ * Handler nào trong số các HTTP method được gán trực tiếp từ
+ * `withAdminSession(...)`, ví dụ `export const GET = withAdminSession(handler);`.
  *
- * Dòng `import { requireAdminSession } from "…"` KHÔNG được đếm: trong đó tên hàm
- * theo sau là ` }` và `"`, không phải `(`. Nên con số trả về đã là số lời gọi
- * thật — đừng trừ đi 1 ở nơi dùng.
+ * Không đếm số lời gọi chung chung — phải khớp đúng hình dạng gán cho từng
+ * method, nên `GET` được bọc nhưng `POST` chỉ gọi `requireAdminSession` trực
+ * tiếp (kể cả có `if ("response" in auth) return auth.response;` đủ dòng) vẫn
+ * bị báo thiếu, đúng dự kiến — wrapper là hợp đồng duy nhất.
  */
-export function guardCallCount(source: string): number {
-  return (source.match(/requireAdminSession\s*\(/g) ?? []).length;
+export function wrappedHandlers(source: string): string[] {
+  return HTTP_METHODS.filter((method) =>
+    new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withAdminSession\\s*\\(`).test(source),
+  );
 }
 
 describe("bộ dò guard", () => {
-  // Kiểm soát âm: nếu bộ dò hỏng, cả bộ quét bên dưới xanh một cách vô nghĩa.
-  it("nhận ra handler thiếu guard", () => {
+  it("nhận ra handler không được bọc withAdminSession", () => {
     const source = `
-      import { requireAdminSession } from "@/lib/auth/requireAdminSession";
-      export async function GET(req: Request) { const s = await requireAdminSession(req); return Response.json({}); }
+      export const GET = withAdminSession(getHandler);
       export async function POST(req: Request) { return Response.json({}); }
     `;
     expect(exportedHandlers(source)).toEqual(["GET", "POST"]);
-    // Hai handler nhưng chỉ một lời gọi guard — POST bị hở.
-    expect(guardCallCount(source)).toBe(1);
-    expect(guardCallCount(source)).toBeLessThan(exportedHandlers(source).length);
+    expect(wrappedHandlers(source)).toEqual(["GET"]);
+    // Hai handler nhưng chỉ một được bọc — POST bị hở.
+    expect(wrappedHandlers(source).length).toBeLessThan(exportedHandlers(source).length);
   });
 
-  it("nhận ra cả handler khai bằng const", () => {
+  // Finding 1 từ review: đây là lỗ hổng thật mà bản đếm-lời-gọi cũ lọt qua.
+  // Gọi requireAdminSession trực tiếp rồi bỏ kết quả (không throw, không
+  // return sớm) biên dịch sạch và scanner cũ báo pass. Bộ quét mới phải đỏ vì
+  // không có `export const POST = withAdminSession(`.
+  it("nhận ra handler gọi requireAdminSession trực tiếp rồi bỏ kết quả — lỗ hổng Finding 1", () => {
+    const source = `
+      import { requireAdminSession } from "@/lib/auth/requireAdminSession";
+      export async function POST(req: Request) {
+        await requireAdminSession(req); // kết quả bị bỏ — không xác thực gì cả
+        return Response.json({ ok: true });
+      }
+    `;
+    expect(exportedHandlers(source)).toEqual(["POST"]);
+    expect(wrappedHandlers(source)).toEqual([]);
+  });
+
+  it("nhận ra cả handler khai bằng const không dùng withAdminSession", () => {
     expect(exportedHandlers(`export const PATCH = async (req: Request) => {};`)).toEqual(["PATCH"]);
+    expect(wrappedHandlers(`export const PATCH = async (req: Request) => {};`)).toEqual([]);
+  });
+
+  it("chấp nhận handler đúng hợp đồng", () => {
+    const source = `export const DELETE = withAdminSession(async (req, { session }) => Response.json({}));`;
+    expect(wrappedHandlers(source)).toEqual(["DELETE"]);
   });
 });
 
@@ -71,18 +108,20 @@ describe("/api/admin/* session guard", () => {
   const files = routeFiles(ADMIN_API);
 
   it.each(files.length ? files : [["(chưa có route admin nào)", ""]])(
-    "%s gọi requireAdminSession trong mọi handler",
+    "%s: mọi handler export được gán từ withAdminSession(...)",
     (name, source) => {
       const handlers = exportedHandlers(source);
       if (handlers.length === 0) return;
       expect(
         source,
-        `${name}: phải import requireAdminSession`,
-      ).toContain('from "@/lib/auth/requireAdminSession"');
+        `${name}: phải import withAdminSession`,
+      ).toContain('from "@/lib/auth/withAdminSession"');
+      const wrapped = wrappedHandlers(source);
+      const unwrapped = handlers.filter((method) => !wrapped.includes(method));
       expect(
-        guardCallCount(source),
-        `${name}: ${handlers.length} handler (${handlers.join(", ")}) nhưng chỉ ${guardCallCount(source)} lời gọi guard`,
-      ).toBeGreaterThanOrEqual(handlers.length);
+        unwrapped,
+        `${name}: handler chưa bọc withAdminSession: ${unwrapped.join(", ") || "(none)"}`,
+      ).toEqual([]);
     },
   );
 });
