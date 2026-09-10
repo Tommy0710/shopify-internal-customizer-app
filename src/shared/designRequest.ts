@@ -23,6 +23,10 @@ const uuidV4 = z
   );
 
 export const createDesignRequestSchema = z.object({
+  // Id Shopify của TRANG đang đứng — cùng giá trị với `?productId=` của GET config,
+  // KHÔNG phải `product.id` nội bộ mà config trả về. Server cần đúng id này để tra
+  // `ProductHost(shopId, shopifyProductId)` và xác minh mọi lựa chọn thuộc về product
+  // mà trang đó thật sự host. Widget có sẵn nó từ `data-*` của App Block.
   productId: shopifyId,
   styleId: z.string().min(1),
   bodyLeatherId: z.string().min(1),
@@ -51,9 +55,11 @@ const toCents = (amount: number): number => Math.round(amount * 100);
 
 const summarySchema = z
   .object({
-    bodyPrice: z.number().nonnegative(),
-    animalPrice: z.number().nonnegative(),
-    total: z.number().nonnegative(),
+    // `.finite()`: nonnegative() vẫn cho Infinity qua, và Infinity === Infinity
+    // làm refine bên dưới gật đầu với một phản hồi server hỏng.
+    bodyPrice: z.number().finite().nonnegative(),
+    animalPrice: z.number().finite().nonnegative(),
+    total: z.number().finite().nonnegative(),
   })
   .refine((summary) => toCents(summary.total) === toCents(summary.bodyPrice) + toCents(summary.animalPrice), {
     message: "total phải bằng bodyPrice + animalPrice (so sánh bằng cent nguyên)",

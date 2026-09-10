@@ -127,6 +127,11 @@ describe("createDesignResponseSchema", () => {
     const response = { ...validResponse(), summary: { bodyPrice: 0.1, animalPrice: 0.2, total: 0.3 } };
     expect(createDesignResponseSchema.safeParse(response).success).toBe(true);
   });
+
+  it("từ chối Infinity — Infinity === Infinity sẽ làm refine gật đầu với phản hồi hỏng", () => {
+    const response = { ...validResponse(), summary: { bodyPrice: Infinity, animalPrice: 12, total: Infinity } };
+    expect(createDesignResponseSchema.safeParse(response).success).toBe(false);
+  });
 });
 
 describe("DESIGN_ERROR_CODES / designErrorCodeSchema", () => {
