@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { conflict, notFound, parseJson, validationFailed, type FieldError } from "./http";
 import type { AdminApiContext } from "./adminApi";
 import { diffByKey, duplicateKeys } from "./diff";
+import { formatPrice, priceSchema } from "./money";
+import { productReadiness, type ReadinessProblem } from "./readiness";
 
 /**
  * Nửa đầu tab Products (spec §12.2): tạo cấu hình product, gắn host (trang
@@ -42,11 +44,82 @@ export interface ProductRelationDto {
   [key: string]: unknown; // styleId | animalId | stitchId, tuỳ `kind`
 }
 
+// ── DTO của Task 6: ma trận giá, lưới SVG, cây đầy đủ ──────────────────────
+
+/** P2b chưa tồn tại — `variant` luôn `null` cho tới khi variant sync ghi các cột này. */
+export interface PriceCellVariantDto {
+  shopifyProductId: string;
+  shopifyVariantId: string;
+  priceSnapshot: string | null;
+  missing: boolean;
+  syncedAt: string | null;
+}
+
+export interface PriceCellDto {
+  leatherId: string;
+  name: string;
+  price: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  archived: boolean;
+  variant: PriceCellVariantDto | null;
+}
+
+export interface StyleAnimalCellDto {
+  animalId: string;
+  name: string;
+  svgAssetId: string;
+  svgUrl: string;
+  displayLabel: string | null;
+  description: string | null;
+  defaultStitchId: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface StyleTreeDto {
+  styleId: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  archived: boolean;
+  leathers: PriceCellDto[];
+  animals: StyleAnimalCellDto[];
+}
+
+export interface AnimalTreeDto {
+  animalId: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  archived: boolean;
+  leathers: PriceCellDto[];
+}
+
+export interface StitchTreeDto {
+  stitchId: string;
+  name: string;
+  colorHex: string;
+  isActive: boolean;
+  sortOrder: number;
+  archived: boolean;
+}
+
+/**
+ * `GET /products/:id` — Task 5 dựng hình cơ bản (flat, bốn nhánh quan hệ
+ * "phẳng"); Task 6 mở rộng thêm `createdAt`/`updatedAt` và làm giàu từng
+ * phần tử quan hệ (`leathers`/`animals` lồng bên trong, `archived`), cộng
+ * `readiness`. Không lồng dưới khoá `"product"` — giữ đúng quy ước phẳng đã
+ * có từ Task 5 (`ProductSummaryDto`), tránh phá vỡ hợp đồng đã merge.
+ */
 export interface ProductTreeDto extends ProductSummaryDto {
+  createdAt: string;
+  updatedAt: string;
   hosts: ProductHostDto[];
-  styles: ProductRelationDto[];
-  animals: ProductRelationDto[];
-  stitches: ProductRelationDto[];
+  styles: StyleTreeDto[];
+  animals: AnimalTreeDto[];
+  stitches: StitchTreeDto[];
+  readiness: { ready: boolean; problems: ReadinessProblem[] };
 }
 
 function toProductSummaryDto(row: CustomizableProduct): ProductSummaryDto {
@@ -75,6 +148,181 @@ function toHostDto(row: {
   };
 }
 
+// ── Task 6: row → DTO cho ma trận giá / lưới SVG / cây đầy đủ ─────────────
+
+/** Có `shopifyVariantId` mới coi là "đã có variant" — P2b ghi các cột này, hôm nay luôn null. */
+function toPriceCellVariantDto(row: {
+  shopifyProductId: string | null;
+  shopifyVariantId: string | null;
+  variantPriceSnapshot: Prisma.Decimal | null;
+  variantMissing: boolean;
+  variantSyncedAt: Date | null;
+}): PriceCellVariantDto | null {
+  if (!row.shopifyVariantId) return null;
+  return {
+    shopifyProductId: row.shopifyProductId ?? "",
+    shopifyVariantId: row.shopifyVariantId,
+    priceSnapshot: formatPrice(row.variantPriceSnapshot),
+    missing: row.variantMissing,
+    syncedAt: row.variantSyncedAt ? row.variantSyncedAt.toISOString() : null,
+  };
+}
+
+function toPriceCellDto(row: {
+  leatherId: string;
+  leather: { name: string; archivedAt: Date | null };
+  priceInput: Prisma.Decimal | null;
+  isActive: boolean;
+  sortOrder: number;
+  shopifyProductId: string | null;
+  shopifyVariantId: string | null;
+  variantPriceSnapshot: Prisma.Decimal | null;
+  variantMissing: boolean;
+  variantSyncedAt: Date | null;
+}): PriceCellDto {
+  return {
+    leatherId: row.leatherId,
+    name: row.leather.name,
+    price: formatPrice(row.priceInput),
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+    archived: row.leather.archivedAt != null,
+    variant: toPriceCellVariantDto(row),
+  };
+}
+
+function toStyleAnimalCellDto(row: {
+  animalId: string;
+  animal: { name: string };
+  svgAssetId: string;
+  svgAsset: { publicUrl: string };
+  displayLabel: string | null;
+  description: string | null;
+  defaultStitchId: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}): StyleAnimalCellDto {
+  return {
+    animalId: row.animalId,
+    name: row.animal.name,
+    svgAssetId: row.svgAssetId,
+    svgUrl: row.svgAsset.publicUrl,
+    displayLabel: row.displayLabel,
+    description: row.description,
+    defaultStitchId: row.defaultStitchId,
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+  };
+}
+
+function toStyleTreeDto(row: {
+  styleId: string;
+  style: { name: string; archivedAt: Date | null };
+  isActive: boolean;
+  sortOrder: number;
+  styleLeathers: Parameters<typeof toPriceCellDto>[0][];
+  styleAnimals: Parameters<typeof toStyleAnimalCellDto>[0][];
+}): StyleTreeDto {
+  return {
+    styleId: row.styleId,
+    name: row.style.name,
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+    archived: row.style.archivedAt != null,
+    leathers: row.styleLeathers.map(toPriceCellDto),
+    animals: row.styleAnimals.map(toStyleAnimalCellDto),
+  };
+}
+
+function toAnimalTreeDto(row: {
+  animalId: string;
+  animal: { name: string; archivedAt: Date | null };
+  isActive: boolean;
+  sortOrder: number;
+  animalLeathers: Parameters<typeof toPriceCellDto>[0][];
+}): AnimalTreeDto {
+  return {
+    animalId: row.animalId,
+    name: row.animal.name,
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+    archived: row.animal.archivedAt != null,
+    leathers: row.animalLeathers.map(toPriceCellDto),
+  };
+}
+
+function toStitchTreeDto(row: {
+  stitchId: string;
+  stitch: { name: string; colorHex: string; archivedAt: Date | null };
+  isActive: boolean;
+  sortOrder: number;
+}): StitchTreeDto {
+  return {
+    stitchId: row.stitchId,
+    name: row.stitch.name,
+    colorHex: row.stitch.colorHex,
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+    archived: row.stitch.archivedAt != null,
+  };
+}
+
+/**
+ * Dựng cây đầy đủ bằng SỐ QUERY CỐ ĐỊNH: một `findMany` mỗi bảng quan hệ cấp
+ * một (host/style/animal/stitch), lồng `include` cho các bảng con — Prisma
+ * gộp include thành lời gọi theo BẢNG chứ không lặp theo hàng cha, nên số
+ * lời gọi không phụ thuộc kích thước ma trận (10×10 hay 1×1 đều cùng một số
+ * lời gọi). `tests-db/admin/product-matrices.db.test.ts` spy trực tiếp trên
+ * các delegate để khẳng định điều này thay vì đọc log SQL của Prisma (client
+ * hiện chỉ log "error", xem `src/lib/db.ts`).
+ */
+export async function buildProductTree(tx: Tx, product: CustomizableProduct): Promise<ProductTreeDto> {
+  const [hosts, styles, animals, stitches] = await Promise.all([
+    tx.productHost.findMany({
+      where: { productId: product.id },
+      orderBy: [{ isPrimary: "desc" }, { shopifyProductId: "asc" }],
+    }),
+    tx.productStyle.findMany({
+      where: { productId: product.id },
+      include: {
+        style: true,
+        styleLeathers: { include: { leather: true }, orderBy: { sortOrder: "asc" } },
+        styleAnimals: { include: { animal: true, svgAsset: true }, orderBy: { sortOrder: "asc" } },
+      },
+      orderBy: { sortOrder: "asc" },
+    }),
+    tx.productAnimal.findMany({
+      where: { productId: product.id },
+      include: {
+        animal: true,
+        animalLeathers: { include: { leather: true }, orderBy: { sortOrder: "asc" } },
+      },
+      orderBy: { sortOrder: "asc" },
+    }),
+    tx.productStitch.findMany({
+      where: { productId: product.id },
+      include: { stitch: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+
+  const styleDtos = styles.map(toStyleTreeDto);
+  const animalDtos = animals.map(toAnimalTreeDto);
+  const stitchDtos = stitches.map(toStitchTreeDto);
+  const readiness = productReadiness({ hosts, styles: styleDtos, animals: animalDtos, stitches: stitchDtos });
+
+  return {
+    ...toProductSummaryDto(product),
+    createdAt: product.createdAt.toISOString(),
+    updatedAt: product.updatedAt.toISOString(),
+    hosts: hosts.map(toHostDto),
+    styles: styleDtos,
+    animals: animalDtos,
+    stitches: stitchDtos,
+    readiness,
+  };
+}
+
 // ── loadProductForShop — MỌI handler có :id gọi hàm này ĐẦU TIÊN ──────────
 // ProductStyle/ProductAnimal/ProductStitch không có cột shopId — id sai shop
 // và id không tồn tại phải cho CÙNG một 404, không được phân biệt được từ
@@ -92,6 +340,7 @@ const createProductSchema = z.object({
 });
 const updateProductSchema = z.object({
   name: z.string().trim().min(1, "name là bắt buộc").max(120, "name tối đa 120 ký tự").optional(),
+  isEnabled: z.boolean().optional(),
 });
 
 async function listHandler(_req: NextRequest, ctx: AdminApiContext): Promise<Response> {
@@ -110,28 +359,33 @@ async function createHandler(req: NextRequest, ctx: AdminApiContext): Promise<Re
 
 async function getHandler(_req: NextRequest, ctx: AdminApiContext<{ id: string }>): Promise<Response> {
   const product = await loadProductForShop(db, ctx.shop.id, ctx.params.id);
-  const [hosts, styles, animals, stitches] = await Promise.all([
-    db.productHost.findMany({ where: { productId: product.id }, orderBy: [{ isPrimary: "desc" }, { shopifyProductId: "asc" }] }),
-    db.productStyle.findMany({ where: { productId: product.id }, include: { style: true }, orderBy: { sortOrder: "asc" } }),
-    db.productAnimal.findMany({ where: { productId: product.id }, include: { animal: true }, orderBy: { sortOrder: "asc" } }),
-    db.productStitch.findMany({ where: { productId: product.id }, include: { stitch: true }, orderBy: { sortOrder: "asc" } }),
-  ]);
-  const tree: ProductTreeDto = {
-    ...toProductSummaryDto(product),
-    hosts: hosts.map(toHostDto),
-    styles: styles.map((row) => toRelationDto("style", "styleId", row)),
-    animals: animals.map((row) => toRelationDto("animal", "animalId", row)),
-    stitches: stitches.map((row) => toRelationDto("stitch", "stitchId", row)),
-  };
+  const tree = await buildProductTree(db, product);
   return Response.json(tree);
 }
 
+/**
+ * `isEnabled: true` bị chặn 409 nếu `readiness.ready` sai — phải dựng LẠI cây
+ * (không tin `isEnabled` cũ trong DB) để readiness luôn được tính trên trạng
+ * thái mới nhất. `isEnabled: false` (tắt khẩn cấp) không bao giờ bị chặn —
+ * kiểm tra chỉ chạy khi request THỰC SỰ xin bật lên `true`.
+ */
 async function updateHandler(req: NextRequest, ctx: AdminApiContext<{ id: string }>): Promise<Response> {
   const body = await parseJson(req, updateProductSchema);
   const product = await loadProductForShop(db, ctx.shop.id, ctx.params.id);
+
+  if (body.isEnabled === true) {
+    const tree = await buildProductTree(db, product);
+    if (!tree.readiness.ready) {
+      conflict("NOT_READY", { problems: tree.readiness.problems });
+    }
+  }
+
   const updated = await db.customizableProduct.update({
     where: { id: product.id },
-    data: { ...(body.name !== undefined ? { name: body.name } : {}) },
+    data: {
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.isEnabled !== undefined ? { isEnabled: body.isEnabled } : {}),
+    },
   });
   return Response.json(toProductSummaryDto(updated));
 }
@@ -381,6 +635,240 @@ async function putRelation(kind: RelationKind, req: NextRequest, ctx: AdminApiCo
   return Response.json(rows.map((row) => toRelationDto(kind, keyField, row)));
 }
 
+// ── Ma trận giá A/B — style × leather, animal × leather ────────────────────
+// R4 (như style/animal/stitch): vắng mặt khỏi danh sách → isActive=false,
+// KHÔNG xoá. Khác với putRelation ở một điểm bắt buộc: update KHÔNG BAO GIỜ
+// đụng `shopifyVariantId`/`shopifyVariantGid`/`variantPriceSnapshot`/
+// `variantMissing` — các cột đó là của P2b (variant sync), route giá chỉ ghi
+// `priceInput`/`isActive`/`sortOrder`.
+
+type PriceMatrixKind = "styleLeather" | "animalLeather";
+
+const priceCellItemSchema = z.object({
+  leatherId: z.string().min(1, "leatherId là bắt buộc"),
+  price: priceSchema.nullable(),
+  isActive: z.boolean(),
+  sortOrder: z.number().int().min(0),
+});
+const priceCellListSchema = z.array(priceCellItemSchema);
+type PriceCellItem = z.infer<typeof priceCellItemSchema>;
+
+interface PriceMatrixRow {
+  id: string;
+  leatherId: string;
+  leather: { name: string; archivedAt: Date | null };
+  priceInput: Prisma.Decimal | null;
+  isActive: boolean;
+  sortOrder: number;
+  shopifyProductId: string | null;
+  shopifyVariantId: string | null;
+  variantPriceSnapshot: Prisma.Decimal | null;
+  variantMissing: boolean;
+  variantSyncedAt: Date | null;
+}
+
+interface PriceMatrixDelegate {
+  findMany(args: unknown): Prisma.PrismaPromise<PriceMatrixRow[]>;
+  create(args: unknown): Prisma.PrismaPromise<PriceMatrixRow>;
+  update(args: unknown): Prisma.PrismaPromise<PriceMatrixRow>;
+  updateMany(args: unknown): Prisma.PrismaPromise<unknown>;
+}
+
+function priceMatrixDelegateFor(tx: Tx, kind: PriceMatrixKind): PriceMatrixDelegate {
+  return kind === "styleLeather"
+    ? (tx.productStyleLeather as unknown as PriceMatrixDelegate)
+    : (tx.animalLeather as unknown as PriceMatrixDelegate);
+}
+
+/** leatherId phải thuộc shop này và chưa archived — cùng quy ước `assertRelationRefsValid`. */
+async function assertLeatherRefsValid(tx: Tx, shopId: string, desired: PriceCellItem[]): Promise<void> {
+  const ids = desired.map((d) => d.leatherId);
+  if (ids.length === 0) return;
+  const rows = await tx.leather.findMany({ where: { shopId, id: { in: ids }, archivedAt: null } });
+  const validIds = new Set(rows.map((r) => r.id));
+  const errors: FieldError[] = [];
+  desired.forEach((d, index) => {
+    if (!validIds.has(d.leatherId)) {
+      errors.push({ field: `${index}.leatherId`, code: "invalid_reference", message: "leatherId không hợp lệ" });
+    }
+  });
+  if (errors.length) validationFailed(errors);
+}
+
+async function putPriceMatrix(
+  kind: PriceMatrixKind,
+  req: NextRequest,
+  ctx: AdminApiContext<{ id: string; styleId?: string; animalId?: string }>,
+): Promise<Response> {
+  const desired = await parseJson(req, priceCellListSchema);
+
+  const dupes = duplicateKeys(desired, (d) => d.leatherId);
+  if (dupes.length) {
+    validationFailed(dupes.map((id) => ({ field: "leatherId", code: "duplicate", message: `leatherId ${id} xuất hiện hơn một lần` })));
+  }
+
+  const parentField = kind === "styleLeather" ? "productStyleId" : "productAnimalId";
+
+  const rows = await db.$transaction(async (tx) => {
+    const product = await loadProductForShop(tx, ctx.shop.id, ctx.params.id);
+
+    let parentId: string;
+    if (kind === "styleLeather") {
+      const productStyle = await tx.productStyle.findFirst({ where: { productId: product.id, styleId: ctx.params.styleId } });
+      if (!productStyle) notFound();
+      parentId = productStyle.id;
+    } else {
+      const productAnimal = await tx.productAnimal.findFirst({ where: { productId: product.id, animalId: ctx.params.animalId } });
+      if (!productAnimal) notFound();
+      parentId = productAnimal.id;
+    }
+
+    await assertLeatherRefsValid(tx, ctx.shop.id, desired);
+
+    const delegate = priceMatrixDelegateFor(tx, kind);
+    const existing = await delegate.findMany({ where: { [parentField]: parentId } });
+    const { toCreate, toUpdate, missing } = diffByKey<PriceCellItem, PriceMatrixRow>(
+      desired,
+      existing,
+      (d) => d.leatherId,
+      (e) => e.leatherId,
+    );
+
+    for (const d of toCreate) {
+      await delegate.create({
+        data: { [parentField]: parentId, leatherId: d.leatherId, priceInput: d.price, isActive: d.isActive, sortOrder: d.sortOrder },
+      });
+    }
+    for (const pair of toUpdate) {
+      // ★ Chỉ ba trường này — KHÔNG bao giờ đụng cột variant (P2b ghi riêng).
+      await delegate.update({
+        where: { id: pair.existing.id },
+        data: { priceInput: pair.desired.price, isActive: pair.desired.isActive, sortOrder: pair.desired.sortOrder },
+      });
+    }
+    if (missing.length) {
+      await delegate.updateMany({ where: { id: { in: missing.map((m) => m.id) } }, data: { isActive: false } });
+    }
+
+    return delegate.findMany({ where: { [parentField]: parentId }, include: { leather: true }, orderBy: { sortOrder: "asc" } });
+  });
+
+  return Response.json(rows.map(toPriceCellDto));
+}
+
+// ── Lưới SVG mockup — style × animal ───────────────────────────────────────
+
+const styleAnimalItemSchema = z.object({
+  animalId: z.string().min(1, "animalId là bắt buộc"),
+  svgAssetId: z.string().min(1, "svgAssetId là bắt buộc"),
+  displayLabel: z.string().trim().max(200).nullish(),
+  description: z.string().trim().max(2000).nullish(),
+  defaultStitchId: z.string().min(1).nullish(),
+  isActive: z.boolean(),
+  sortOrder: z.number().int().min(0),
+});
+const styleAnimalListSchema = z.array(styleAnimalItemSchema);
+type StyleAnimalItem = z.infer<typeof styleAnimalItemSchema>;
+
+async function putStyleAnimals(req: NextRequest, ctx: AdminApiContext<{ id: string; styleId: string }>): Promise<Response> {
+  const desired = await parseJson(req, styleAnimalListSchema);
+
+  const dupes = duplicateKeys(desired, (d) => d.animalId);
+  if (dupes.length) {
+    validationFailed(dupes.map((id) => ({ field: "animalId", code: "duplicate", message: `animalId ${id} xuất hiện hơn một lần` })));
+  }
+
+  const rows = await db.$transaction(async (tx) => {
+    const product = await loadProductForShop(tx, ctx.shop.id, ctx.params.id);
+    const productStyle = await tx.productStyle.findFirst({ where: { productId: product.id, styleId: ctx.params.styleId } });
+    if (!productStyle) notFound();
+
+    // Ba tham chiếu cần kiểm, mỗi loại MỘT query cho toàn bộ danh sách:
+    // animalId phải có ProductAnimal trong product này; svgAssetId phải là
+    // Asset shop này, kind SVG_MOCKUP, chưa archived, đã qua sanitize+validate
+    // (svgValidatedAt khác null — Task 3); defaultStitchId (nếu có) phải có
+    // ProductStitch trong product này.
+    const animalIds = desired.map((d) => d.animalId);
+    const productAnimals = animalIds.length
+      ? await tx.productAnimal.findMany({ where: { productId: product.id, animalId: { in: animalIds } } })
+      : [];
+    const validAnimalIds = new Set(productAnimals.map((r) => r.animalId));
+
+    const assetIds = desired.map((d) => d.svgAssetId);
+    const assets = assetIds.length ? await tx.asset.findMany({ where: { shopId: ctx.shop.id, id: { in: assetIds } } }) : [];
+    const assetById = new Map(assets.map((a) => [a.id, a]));
+
+    const stitchIds = desired.map((d) => d.defaultStitchId).filter((id): id is string => !!id);
+    const productStitches = stitchIds.length
+      ? await tx.productStitch.findMany({ where: { productId: product.id, stitchId: { in: stitchIds } } })
+      : [];
+    const validStitchIds = new Set(productStitches.map((r) => r.stitchId));
+
+    const errors: FieldError[] = [];
+    desired.forEach((d, index) => {
+      if (!validAnimalIds.has(d.animalId)) {
+        errors.push({ field: `${index}.animalId`, code: "invalid_reference", message: "animalId không có trong product" });
+      }
+      const asset = assetById.get(d.svgAssetId);
+      const validAsset = !!asset && asset.kind === "SVG_MOCKUP" && asset.archivedAt == null && asset.svgValidatedAt != null;
+      if (!validAsset) {
+        errors.push({ field: `${index}.svgAssetId`, code: "invalid_asset", message: "svgAssetId không hợp lệ" });
+      }
+      if (d.defaultStitchId && !validStitchIds.has(d.defaultStitchId)) {
+        errors.push({ field: `${index}.defaultStitchId`, code: "invalid_reference", message: "defaultStitchId không có trong product" });
+      }
+    });
+    if (errors.length) validationFailed(errors);
+
+    const existing = await tx.productStyleAnimal.findMany({ where: { productStyleId: productStyle.id } });
+    const { toCreate, toUpdate, missing } = diffByKey<StyleAnimalItem, { id: string; animalId: string }>(
+      desired,
+      existing,
+      (d) => d.animalId,
+      (e) => e.animalId,
+    );
+
+    for (const d of toCreate) {
+      await tx.productStyleAnimal.create({
+        data: {
+          productStyleId: productStyle.id,
+          animalId: d.animalId,
+          svgAssetId: d.svgAssetId,
+          displayLabel: d.displayLabel ?? null,
+          description: d.description ?? null,
+          defaultStitchId: d.defaultStitchId ?? null,
+          isActive: d.isActive,
+          sortOrder: d.sortOrder,
+        },
+      });
+    }
+    for (const pair of toUpdate) {
+      await tx.productStyleAnimal.update({
+        where: { id: pair.existing.id },
+        data: {
+          svgAssetId: pair.desired.svgAssetId,
+          displayLabel: pair.desired.displayLabel ?? null,
+          description: pair.desired.description ?? null,
+          defaultStitchId: pair.desired.defaultStitchId ?? null,
+          isActive: pair.desired.isActive,
+          sortOrder: pair.desired.sortOrder,
+        },
+      });
+    }
+    if (missing.length) {
+      await tx.productStyleAnimal.updateMany({ where: { id: { in: missing.map((m) => m.id) } }, data: { isActive: false } });
+    }
+
+    return tx.productStyleAnimal.findMany({
+      where: { productStyleId: productStyle.id },
+      include: { animal: true, svgAsset: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  });
+
+  return Response.json(rows.map(toStyleAnimalCellDto));
+}
+
 // ── Export ──────────────────────────────────────────────────────────────
 
 export const productHandlers = {
@@ -392,4 +880,9 @@ export const productHandlers = {
   putStyles: (req: NextRequest, ctx: AdminApiContext<{ id: string }>) => putRelation("style", req, ctx),
   putAnimals: (req: NextRequest, ctx: AdminApiContext<{ id: string }>) => putRelation("animal", req, ctx),
   putStitches: (req: NextRequest, ctx: AdminApiContext<{ id: string }>) => putRelation("stitch", req, ctx),
+  putStyleLeathers: (req: NextRequest, ctx: AdminApiContext<{ id: string; styleId: string }>) =>
+    putPriceMatrix("styleLeather", req, ctx),
+  putAnimalLeathers: (req: NextRequest, ctx: AdminApiContext<{ id: string; animalId: string }>) =>
+    putPriceMatrix("animalLeather", req, ctx),
+  putStyleAnimals,
 };
