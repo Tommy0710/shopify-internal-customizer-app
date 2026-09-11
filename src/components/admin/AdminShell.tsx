@@ -4,6 +4,7 @@ import { Component, useState, type ReactNode } from "react";
 import { AppProvider, Banner, BlockStack, Button, Frame, InlineStack, Tabs } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { AttributeList } from "./AttributeList";
+import { ProductsTab } from "./ProductsTab";
 import type { AttributeKind } from "@/lib/admin/attributes";
 
 /**
@@ -97,10 +98,6 @@ function AttributesPanel(): ReactNode {
   );
 }
 
-function ProductsPlaceholder(): ReactNode {
-  return <p>Products — sẽ có ở Task 4.</p>;
-}
-
 export function AdminShell(): ReactNode {
   const [selected, setSelected] = useState(0);
 
@@ -108,7 +105,7 @@ export function AdminShell(): ReactNode {
     <AppProvider i18n={enTranslations}>
       <Frame>
         <Tabs tabs={[...TABS]} selected={selected} onSelect={setSelected}>
-          <AdminErrorBoundary>{selected === 0 ? <AttributesPanel /> : <ProductsPlaceholder />}</AdminErrorBoundary>
+          <AdminErrorBoundary>{selected === 0 ? <AttributesPanel /> : <ProductsTab />}</AdminErrorBoundary>
         </Tabs>
       </Frame>
     </AppProvider>

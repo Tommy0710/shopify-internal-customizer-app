@@ -50,7 +50,13 @@ describe("AdminShell", () => {
 
   it("click tab Products chuyển panel hiển thị", async () => {
     stubAppBridge();
-    vi.stubGlobal("fetch", mockEmptyLeathersList());
+    vi.stubGlobal(
+      "fetch",
+      mockAdminFetchResponses({
+        "GET /api/admin/leathers": { status: 200, body: { items: [] } },
+        "GET /api/admin/products": { status: 200, body: { items: [] } },
+      }),
+    );
 
     render(<AdminShell />);
 
@@ -59,14 +65,16 @@ describe("AdminShell", () => {
     // sub-nav "Leathers" của AttributeList (Task 3) chỉ có mặt khi panel
     // Attributes đang hiển thị.
     expect(screen.getByRole("button", { name: "Leathers" })).toBeInTheDocument();
-    expect(screen.queryByText("Products — sẽ có ở Task 4.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chưa có sản phẩm nào.")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("Chưa có mục nào.")).toBeInTheDocument());
 
     fireEvent.click(tablist().getByRole("tab", { name: "Products" }));
 
     expect(tablist().getByRole("tab", { name: "Products" })).toHaveAttribute("aria-selected", "true");
     expect(tablist().getByRole("tab", { name: "Attributes" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByText("Products — sẽ có ở Task 4.")).toBeInTheDocument();
+    // Task 4 thay ProductsPlaceholder bằng ProductsTab thật — panel giờ tự
+    // fetch GET /api/admin/products (mock ở trên) thay vì hiện văn bản tĩnh.
+    await waitFor(() => expect(screen.getByText("Chưa có sản phẩm nào.")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Leathers" })).not.toBeInTheDocument();
   });
 
