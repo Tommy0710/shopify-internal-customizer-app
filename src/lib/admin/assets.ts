@@ -9,6 +9,16 @@ import {
   type SanitizeReport,
   type ValidationReport,
 } from "@/svg-engine";
+// Deep import CÓ CHỦ ĐÍCH, không qua barrel `@/svg-engine` — cùng tiền lệ với
+// `src/lib/svg/parseSvgNode.ts` (import `SVG_NAMESPACE` từ `@/svg-engine/contract`).
+// `extractUrlReferences`/`HREF_ATTRIBUTES` là logic "đọc URL ở đâu trong một
+// SVG" đã được kiểm chứng kỹ (dùng chung bởi cả sanitize.ts lẫn validate.ts) —
+// KHÔNG viết lại một bản regex riêng ở đây, viết lại là cách con bug
+// case-sensitive/không-cho-khoảng-trắng mà chính policy.ts đã từng vá quay
+// lại. Quyết định "master mockup không được nhúng data: URI" là quyết định
+// riêng của ENDPOINT này (fix round 1, security review) — không phải của
+// engine, nên không đụng vào `policy.ts`.
+import { HREF_ATTRIBUTES, extractUrlReferences, normalizeUrlForSchemeCheck } from "@/svg-engine/policy";
 import {
   AssetRejectedError,
   MAX_ASSET_BYTES,
@@ -71,6 +81,61 @@ function dimensionsFromViewBox(viewBox: string | null): { width: number | null; 
   }
   const [, , width, height] = parts;
   return { width: Math.round(width), height: Math.round(height) };
+}
+
+/**
+ * Tham chiếu `data:` (mọi subtype) trong CÂY ĐÃ SANITIZE — cả ở vị trí href
+ * lẫn trong `url(...)` của `style` và thuộc tính trình bày. Đi cùng đường quét
+ * `urlValuesOf` mà `validate.ts` dùng nội bộ: `HREF_ATTRIBUTES` cho giá trị
+ * trực tiếp, `extractUrlReferences` (định nghĩa `url()` DUY NHẤT) cho mọi
+ * thuộc tính khác — không viết một bản regex riêng ở đây.
+ *
+ * Policy P1a (`policy.ts`) CỐ Ý cho `data:image/*` qua sanitize — texture hợp
+ * lệ đôi khi tới dưới dạng đó. Nhưng đây là MASTER MOCKUP (endpoint này), và
+ * nó không có lý do hợp lệ nào để nhúng ảnh: texture được `applyTexture` gắn
+ * lúc RUNTIME, hai fixture thật (angler-fish, crocodile) có 0 data: URI.
+ * SVG-as-image bị trình duyệt sandbox nên nhiều khả năng vô hại — nhưng
+ * "nhiều khả năng" không đủ ở ranh giới lưu trữ, nên endpoint này từ chối
+ * thẳng thay vì tin vào sandbox của mọi trình duyệt tương lai. Quyết định
+ * RIÊNG của endpoint này (fix round 1, security review) — không sửa
+ * `policy.ts`, caller khác của engine giữ nguyên hành vi.
+ */
+function findEmbeddedResourceRefs(root: Element): string[] {
+  const refs: string[] = [];
+  const elements: Element[] = [root, ...(Array.from(root.querySelectorAll("*")) as Element[])];
+  for (const element of elements) {
+    for (const attribute of element.getAttributeNames()) {
+      const value = element.getAttribute(attribute);
+      if (value === null) continue;
+      const candidates = HREF_ATTRIBUTES.includes(attribute) ? [value] : extractUrlReferences(value);
+      for (const candidate of candidates) {
+        if (/^data:/i.test(normalizeUrlForSchemeCheck(candidate))) refs.push(candidate);
+      }
+    }
+  }
+  return refs;
+}
+
+/**
+ * Chuẩn hoá tên file TRƯỚC khi lưu. Đây là chuỗi tấn công DUY NHẤT của luồng
+ * upload không đi qua sanitizer SVG — filename không phải nội dung SVG. Không
+ * khai thác được hôm nay (chưa UI nào render nó), nhưng thư viện asset P2c sẽ
+ * hiển thị nó, nên chuẩn hoá ngay lúc ghi thay vì hoãn tới lúc render.
+ *
+ * Chỉ giữ basename (bỏ mọi thành phần path); bỏ ký tự điều khiển C0/C1/DEL;
+ * bỏ ký tự đảo hướng bidi (dùng để giả đuôi file — "cv‮gpj.exe" đảo hướng hiện
+ * thành "cv...exe.jpg" khi đọc từ trái sang phải); NFC-normalize; cắt 255 ký
+ * tự; rỗng sau khi lọc thì trả "upload".
+ */
+export function sanitizeOriginalFilename(name: string): string {
+  const basename = name.split(/[/\\]/).pop() ?? "";
+  const stripped = basename
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
+    .normalize("NFC")
+    .trim();
+  const truncated = stripped.slice(0, 255);
+  return truncated === "" ? "upload" : truncated;
 }
 
 /**
@@ -178,6 +243,20 @@ async function createSvgAsset(input: {
     });
   }
 
+  const embeddedRefs = findEmbeddedResourceRefs(root);
+  if (embeddedRefs.length > 0) {
+    throw new AdminHttpError(422, {
+      errors: [
+        {
+          field: "file",
+          code: "embedded_resource",
+          message: "SVG nhúng tài nguyên data: URI — không được phép cho mockup master",
+        },
+      ],
+      embeddedRefs,
+    });
+  }
+
   // Validate SAU sanitize: đo đúng cái sẽ được lưu, không phải cái được gửi lên.
   if (!validation.valid) {
     throw new AdminHttpError(422, {
@@ -197,7 +276,7 @@ async function createSvgAsset(input: {
     stored,
     width,
     height,
-    originalFilename: input.file.name,
+    originalFilename: sanitizeOriginalFilename(input.file.name),
     svgValidatedAt: new Date(),
     svgContractVer: validation.contractVersion,
   });
@@ -236,7 +315,7 @@ async function createBinaryAsset(input: {
     stored,
     width: null,
     height: null,
-    originalFilename: input.file.name,
+    originalFilename: sanitizeOriginalFilename(input.file.name),
   });
 }
 
@@ -252,10 +331,13 @@ export async function createAssetFromUpload(input: {
   return createBinaryAsset({ shopId: input.shopId, userId: input.userId, kind: input.kind, file: input.file });
 }
 
-// --- Đọc content-length TRƯỚC khi đọc body — tránh nạp hết một file khổng lồ
-// vào bộ nhớ khi header đã đủ để từ chối sớm. Client có thể thiếu hoặc nói dối
-// header này, nên `createAssetFromUpload`/`createSvgAsset`/`createBinaryAsset`
-// còn kiểm lại kích thước THẬT của file đã parse ở trên. -----------------------
+// --- content-length là ĐƯỜNG NHANH cho client trung thực, KHÔNG phải trần bộ
+// nhớ: client tự khai header này, nên có thể thiếu hoặc nói dối nó (đã xác
+// minh — `content-length: 10` kèm body ~4MB vẫn được `req.formData()` đọc hết
+// vào bộ nhớ trước khi kiểm tiếp chạy). Kiểm THẬT là `file.size` sau khi parse
+// (`createAssetFromUpload`/`createSvgAsset`/`createBinaryAsset`), và trần bộ
+// nhớ thật sự nằm ở giới hạn body của nền tảng (4.5MB trên Vercel serverless).
+// -----------------------------------------------------------------------------
 
 function rejectIfContentLengthTooLarge(req: NextRequest): Response | null {
   const contentLength = req.headers.get("content-length");
@@ -325,8 +407,15 @@ export async function handleValidateSvg(req: NextRequest, _ctx: AdminApiContext)
     throw error;
   }
 
-  const { sanitization, validation } = inspection;
-  const valid = validation.valid && sanitization.externalRefs.length === 0;
+  const { root, sanitization, validation } = inspection;
+  const embeddedRefs = findEmbeddedResourceRefs(root);
+  const valid = validation.valid && sanitization.externalRefs.length === 0 && embeddedRefs.length === 0;
 
-  return Response.json({ valid, validation, sanitization, externalRefs: sanitization.externalRefs });
+  return Response.json({
+    valid,
+    validation,
+    sanitization,
+    externalRefs: sanitization.externalRefs,
+    embeddedRefs,
+  });
 }

@@ -240,6 +240,71 @@ describe("POST /api/admin/assets — Postgres thật, Storage giả", () => {
     await expect(db.asset.count()).resolves.toBe(0);
   });
 
+  it('mockup nhúng data: URI qua <image href>: 422 embedded_resource, storage không được gọi, không có hàng Asset', async () => {
+    await seedShop();
+    const raw = loadFixture("crocodile.svg");
+    const withDataUri = raw.replace(
+      "</svg>",
+      '<image href="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9ImFsZXJ0KDEpIi8+" width="1" height="1"/></svg>',
+    );
+    const req = await adminRequest("https://app.test/api/admin/assets", {
+      method: "POST",
+      body: await uploadForm({ file: svgFile(withDataUri), kind: "SVG_MOCKUP" }),
+    });
+    const res = await uploadAsset(req);
+    const body = (await res.json()) as { errors: Array<{ field: string; code: string }>; embeddedRefs: string[] };
+
+    expect(res.status).toBe(422);
+    expect(body.errors).toEqual([expect.objectContaining({ field: "file", code: "embedded_resource" })]);
+    expect(body.embeddedRefs.some((ref) => ref.startsWith("data:"))).toBe(true);
+    expect(uploads).toHaveLength(0);
+    await expect(db.asset.count()).resolves.toBe(0);
+  });
+
+  it('mockup nhúng data: URI qua style="fill:url(data:...)": 422 embedded_resource', async () => {
+    await seedShop();
+    const raw = loadFixture("crocodile.svg");
+    const withStyleDataUri = raw.replace(
+      "</svg>",
+      '<rect style="fill:url(data:image/svg+xml;base64,AAAA)" width="1" height="1"/></svg>',
+    );
+    const req = await adminRequest("https://app.test/api/admin/assets", {
+      method: "POST",
+      body: await uploadForm({ file: svgFile(withStyleDataUri), kind: "SVG_MOCKUP" }),
+    });
+    const res = await uploadAsset(req);
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { errors: Array<{ field: string; code: string }> };
+    expect(body.errors).toEqual([expect.objectContaining({ code: "embedded_resource" })]);
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('văn bản trong <text> nhắc tới "data:" không bị coi là embedded resource — không phải vị trí URL', async () => {
+    await seedShop();
+    const raw = loadFixture("crocodile.svg");
+    const withText = raw.replace("</svg>", '<text x="0" y="0">data: 42</text></svg>');
+    const req = await adminRequest("https://app.test/api/admin/assets", {
+      method: "POST",
+      body: await uploadForm({ file: svgFile(withText), kind: "SVG_MOCKUP" }),
+    });
+    const res = await uploadAsset(req);
+    expect(res.status).toBe(201);
+  });
+
+  it.each(["angler-fish.svg", "crocodile.svg"])(
+    "%s (fixture thật, không data: URI): vẫn 201 sau khi thêm kiểm embedded_resource",
+    async (fixture) => {
+      await seedShop();
+      const req = await adminRequest("https://app.test/api/admin/assets", {
+        method: "POST",
+        body: await uploadForm({ file: svgFile(loadFixture(fixture), fixture), kind: "SVG_MOCKUP" }),
+      });
+      const res = await uploadAsset(req);
+      expect(res.status).toBe(201);
+    },
+  );
+
   it("SVG hợp lệ cú pháp nhưng thiếu #animal-artwork: 422 svg_contract kèm validation, storage không được gọi", async () => {
     await seedShop();
     const raw = loadFixture("crocodile.svg");
@@ -466,6 +531,25 @@ describe("POST /api/admin/assets/validate-svg — Postgres thật, Storage giả
     expect(res.status).toBe(200);
     expect(body.valid).toBe(false);
     expect(body.externalRefs).toContain("https://evil.example/x.png");
+  });
+
+  it('có data: URI qua <image href>: 200 { valid: false, embeddedRefs: [...] } — báo cáo, không phải lỗi', async () => {
+    await seedShop();
+    const raw = loadFixture("crocodile.svg");
+    const withDataUri = raw.replace(
+      "</svg>",
+      '<image href="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9ImFsZXJ0KDEpIi8+" width="1" height="1"/></svg>',
+    );
+    const req = await adminRequest("https://app.test/api/admin/assets/validate-svg", {
+      method: "POST",
+      body: await uploadForm({ file: svgFile(withDataUri) }),
+    });
+    const res = await validateSvg(req);
+    const body = (await res.json()) as { valid: boolean; embeddedRefs: string[] };
+
+    expect(res.status).toBe(200);
+    expect(body.valid).toBe(false);
+    expect(body.embeddedRefs.some((ref) => ref.startsWith("data:"))).toBe(true);
   });
 
   it("không phải SVG: 422 svg_parse", async () => {
