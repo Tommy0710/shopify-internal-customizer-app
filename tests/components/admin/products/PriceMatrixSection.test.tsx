@@ -246,4 +246,50 @@ describe.each(MATRICES)("PriceMatrixSection matrix=%s", (matrix) => {
     expect(byId.l2).toBe(9); // hàng cũ, chỉ bật lại — giữ nguyên sortOrder cũ, không recompute theo vị trí.
     expect(byId.l3).toBe(10); // hàng mới — gán sau max sortOrder hiện có (9 + 1).
   });
+
+  it("hàng leather đã archive bị loại khỏi PUT dù đang tick — không chặn việc lưu giá của hàng khác trong cùng nhóm (fix round 1)", async () => {
+    stubAppBridge();
+    // L2 đã archive nhưng vẫn isActive:true trong DB (checkbox tick sẵn) —
+    // trường hợp thật: admin archive leather ở tab Attributes SAU khi đã bật
+    // nó trong ma trận giá này. GET /api/admin/leathers (mặc định không kèm
+    // archived) không còn trả L2 — chỉ ô giá đã lưu trước đó (PriceCellDto)
+    // còn biết về nó, qua field `archived`.
+    const cellNormal = makePriceCell({ leatherId: "l1", name: "Suede Brown", price: "80.00", sortOrder: 0, isActive: true, archived: false });
+    const cellArchived = makePriceCell({ leatherId: "l2", name: "Old Croc", price: "60.00", sortOrder: 1, isActive: true, archived: true });
+    const putPath = groupPutPath(matrix, "prod-1", "g1");
+    const fetchMock = mockAdminFetchResponses({
+      [`GET ${leathersPath}`]: { status: 200, body: { items: [makeRelationAttribute({ id: "l1", name: "Suede Brown" })] } },
+      [`PUT ${putPath}`]: { status: 200, body: [] },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithPolaris(
+      <PriceMatrixSection matrix={matrix} product={productWithGroup(matrix, "g1", "Minimalist", [cellNormal, cellArchived])} />,
+    );
+    await openGroup("Minimalist");
+
+    // Chỉ sửa giá của hàng bình thường — không đụng gì tới hàng đã archive.
+    const priceInput = await screen.findByLabelText("Giá Suede Brown");
+    fireEvent.change(priceInput, { target: { value: "82.50" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Lưu giá Minimalist$/i }));
+
+    await waitFor(() => {
+      const call = vi.mocked(fetchMock).mock.calls.find(([input]) => String(input) === putPath);
+      expect(call).toBeDefined();
+    });
+    const [, init] = vi.mocked(fetchMock).mock.calls.find(([input]) => String(input) === putPath)!;
+    const body = JSON.parse((init as RequestInit).body as string) as Array<{ leatherId: string }>;
+
+    // Payload CHỈ chứa hàng bình thường — hàng archived bị loại hoàn toàn,
+    // không phải vì bị bỏ tick mà vì nó archived (server sẽ 422 invalid_reference
+    // nếu bất kỳ leatherId nào trong mảng đã archive).
+    expect(body.map((r) => r.leatherId)).toEqual(["l1"]);
+
+    // Không có banner lỗi 422 nào — request thành công.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // Hàng archived hiện chỉ báo trực quan giải thích lý do nó không tham gia.
+    expect(screen.getByText(/archive/i)).toBeInTheDocument();
+  });
 });

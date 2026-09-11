@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BlockStack, Button, Card, Checkbox, Collapsible, InlineStack, Spinner, Text, Tooltip } from "@shopify/polaris";
+import { Badge, BlockStack, Button, Card, Checkbox, Collapsible, InlineStack, Spinner, Text, Tooltip } from "@shopify/polaris";
 import { useAdminQuery } from "@/lib/admin-ui/useAdminQuery";
 import { useAdminMutation } from "@/lib/admin-ui/useAdminMutation";
 import { AdminErrorBanner } from "@/components/AdminErrorBanner";
@@ -70,6 +70,13 @@ function variantStatusLabel(variant: PriceCellVariantDto | null): string {
 interface RowDef {
   leatherId: string;
   name: string;
+  /** Leather bên dưới đã bị archive (từ `PriceCellDto.archived`) — hàng này
+   * KHÔNG BAO GIỜ được đưa vào PUT (xem `handleSave`), bất kể checkbox đang
+   * tick hay không: `assertLeatherRefsValid` phía server reject NGUYÊN mảng
+   * (422 `invalid_reference`) nếu bất kỳ leatherId nào trong đó đã archive —
+   * không phải chỉ riêng hàng đó. Một leather lấy từ `shopLeathers` (GET mặc
+   * định không kèm archived) không bao giờ archived. */
+  archived: boolean;
 }
 
 /** Union của leather active của shop + mọi ô giá đã tồn tại cho nhóm này (kể
@@ -79,12 +86,12 @@ function buildRows(cells: PriceCellDto[], shopLeathers: AttributeDto[]): RowDef[
   const rows: RowDef[] = [];
   const seen = new Set<string>();
   for (const cell of cells) {
-    rows.push({ leatherId: cell.leatherId, name: cell.name });
+    rows.push({ leatherId: cell.leatherId, name: cell.name, archived: cell.archived });
     seen.add(cell.leatherId);
   }
   for (const leather of shopLeathers) {
     if (seen.has(leather.id)) continue;
-    rows.push({ leatherId: leather.id, name: leather.name });
+    rows.push({ leatherId: leather.id, name: leather.name, archived: false });
     seen.add(leather.id);
   }
   return rows;
@@ -172,6 +179,14 @@ function PriceMatrixGroup({ group, shopLeathers, putPath, onSaved }: PriceMatrix
 
     const body = rows
       .map((row) => {
+        // Loại HOÀN TOÀN khỏi payload, bất kể checkbox đang tick hay không —
+        // không phải "coi như bỏ tick". `assertLeatherRefsValid` phía server
+        // reject NGUYÊN mảng nếu có bất kỳ leatherId archived nào trong đó,
+        // nên một hàng archived còn tick sẽ chặn luôn cả những hàng khác đang
+        // sửa hợp lệ trong cùng lần lưu (fix round 1 — lỗi thật, tái hiện được
+        // bằng thực thi). Bỏ hẳn khỏi mảng vừa tránh 422 vừa đúng quy ước "vắng
+        // mặt = deactivate" (R4) sẵn có phía server — không cần logic mới.
+        if (row.archived) return null;
         const draft = draftFor(row.leatherId);
         if (!draft.isActive) return null;
         const existing = cellByLeatherId.get(row.leatherId);
@@ -210,9 +225,24 @@ function PriceMatrixGroup({ group, shopLeathers, putPath, onSaved }: PriceMatrix
                 const cell = cellByLeatherId.get(row.leatherId);
                 return (
                   <InlineStack key={row.leatherId} gap="200" blockAlign="center">
-                    <Checkbox label={row.name} checked={draft.isActive} onChange={() => toggleActive(row.leatherId)} />
-                    <PriceField label={`Giá ${row.name}`} value={draft.price} onChange={(v) => setPrice(row.leatherId, v)} />
+                    <Checkbox
+                      label={row.name}
+                      checked={draft.isActive}
+                      disabled={row.archived}
+                      onChange={() => toggleActive(row.leatherId)}
+                    />
+                    <PriceField
+                      label={`Giá ${row.name}`}
+                      value={draft.price}
+                      onChange={(v) => setPrice(row.leatherId, v)}
+                      disabled={row.archived}
+                    />
                     <Text as="span">{variantStatusLabel(cell?.variant ?? null)}</Text>
+                    {row.archived && (
+                      <Tooltip content="Leather này đã bị archive ở tab Attributes — hàng sẽ tự tắt (không offer) khi lưu, không sửa được nữa.">
+                        <Badge tone="warning">Đã archive</Badge>
+                      </Tooltip>
+                    )}
                   </InlineStack>
                 );
               })}
