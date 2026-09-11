@@ -12,6 +12,13 @@
  * `AdminApiError` chuẩn hoá cả hai hình đó, cộng thêm hai trường hợp không phải
  * lỗi server (thiếu App Bridge, lỗi mạng) dùng `status: 0` với `code` riêng để
  * UI phân biệt được — không lẫn với một 4xx/5xx thật.
+ *
+ * `details` giữ NGUYÊN body JSON đã parse (khi có) — một số route đính thêm
+ * trường ngoài `errors`/`error` (`validation`, `embeddedRefs`, `externalRefs`
+ * của `POST /api/admin/assets`, ví dụ). `fieldErrors`/`code` chỉ tách đúng hai
+ * trường cố định của hợp đồng lỗi; `details` là lối thoát để caller (P2c Task 2
+ * trở đi, vd. `AssetUploadField`) đọc phần payload đặc thù của route đó mà
+ * KHÔNG cần tự `res.json()` lần hai — parser vẫn chỉ có một chỗ.
  */
 
 export interface AdminFieldError {
@@ -26,6 +33,7 @@ export class AdminApiError extends Error {
     readonly code: string | null,
     readonly fieldErrors: AdminFieldError[] | null,
     message: string,
+    readonly details: Record<string, unknown> | null = null,
   ) {
     super(message);
     this.name = "AdminApiError";
@@ -53,20 +61,22 @@ async function getIdToken(): Promise<string> {
   return bridge.idToken();
 }
 
-async function parseErrorBody(res: Response): Promise<{ code: string | null; fieldErrors: AdminFieldError[] | null }> {
+async function parseErrorBody(
+  res: Response,
+): Promise<{ code: string | null; fieldErrors: AdminFieldError[] | null; details: Record<string, unknown> | null }> {
   let body: unknown;
   try {
     body = await res.json();
   } catch {
-    return { code: null, fieldErrors: null };
+    return { code: null, fieldErrors: null, details: null };
   }
-  if (!body || typeof body !== "object") return { code: null, fieldErrors: null };
+  if (!body || typeof body !== "object") return { code: null, fieldErrors: null, details: null };
   const record = body as Record<string, unknown>;
   if (res.status === 422 && Array.isArray(record.errors)) {
-    return { code: null, fieldErrors: record.errors as AdminFieldError[] };
+    return { code: null, fieldErrors: record.errors as AdminFieldError[], details: record };
   }
   const code = typeof record.error === "string" ? record.error : null;
-  return { code, fieldErrors: null };
+  return { code, fieldErrors: null, details: record };
 }
 
 export async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -88,8 +98,8 @@ export async function adminFetch<T>(path: string, init: RequestInit = {}): Promi
   }
 
   if (!res.ok) {
-    const { code, fieldErrors } = await parseErrorBody(res);
-    throw new AdminApiError(res.status, code, fieldErrors, code ?? `HTTP ${res.status}`);
+    const { code, fieldErrors, details } = await parseErrorBody(res);
+    throw new AdminApiError(res.status, code, fieldErrors, code ?? `HTTP ${res.status}`, details);
   }
 
   return (await res.json()) as T;

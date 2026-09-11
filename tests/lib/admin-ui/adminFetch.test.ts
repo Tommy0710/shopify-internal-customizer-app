@@ -79,6 +79,20 @@ describe("adminFetch", () => {
     });
   });
 
+  it("giữ nguyên toàn bộ body lỗi trong `details` — route như /api/admin/assets đính thêm trường ngoài errors/error", async () => {
+    const body = {
+      errors: [{ field: "file", code: "svg_contract", message: "SVG không thoả hợp đồng customizer" }],
+      validation: { valid: false, contractVersion: "animal-v1", viewBox: null, checks: [] },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(422, body));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adminFetch("/api/admin/assets", { method: "POST" })).rejects.toMatchObject({
+      status: 422,
+      details: body,
+    });
+  });
+
   it("204 không body → resolve undefined, không gọi res.json()", async () => {
     const res = new Response(null, { status: 204 });
     const jsonSpy = vi.spyOn(res, "json");
