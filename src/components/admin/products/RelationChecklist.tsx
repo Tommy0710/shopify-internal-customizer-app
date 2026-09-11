@@ -93,9 +93,28 @@ export function RelationChecklist({ kind, product, onSaved }: RelationChecklistP
     });
   }
 
+  /**
+   * Quyết định sortOrder — cùng cơ chế đã dựng và kiểm chứng ở
+   * `PriceMatrixSection.tsx` (Task 5): hàng ĐÃ có quan hệ product trước đó
+   * (dù đang active hay không — `relationArray` không lọc isActive) giữ
+   * NGUYÊN `sortOrder` cũ, tra theo id từ chính `relationArray` của product,
+   * không recompute lại theo vị trí trong mảng đã lọc `checked`. Chỉ id THẬT
+   * SỰ MỚI (chưa từng có quan hệ) mới được gán index mới, sau `sortOrder`
+   * lớn nhất hiện có. Đây là fix cho lỗi đã xác nhận bằng thực thi hai lần
+   * (sau Task 4, và lại ở review Task 5): bản cũ tính `sortOrder = index`
+   * MỖI LẦN save, nên một save không đụng tới hàng X vẫn âm thầm đổi
+   * sortOrder của X nếu vị trí của nó trong mảng đã lọc thay đổi.
+   */
   async function handleSave(): Promise<void> {
+    const existingSortOrder = new Map(relationArray.map((e) => [String(e[keyField]), e.sortOrder as number]));
+    const existingMaxSortOrder = relationArray.reduce((max, e) => Math.max(max, e.sortOrder as number), -1);
+    let nextNewSortOrder = existingMaxSortOrder + 1;
+
     const items = (data?.items ?? []).filter((attr) => checked.has(attr.id));
-    const body = items.map((attr, index) => ({ [keyField]: attr.id, isActive: true, sortOrder: index }));
+    const body = items.map((attr) => {
+      const sortOrder = existingSortOrder.has(attr.id) ? existingSortOrder.get(attr.id)! : nextNewSortOrder++;
+      return { [keyField]: attr.id, isActive: true, sortOrder };
+    });
     try {
       await mutation.mutate(`/api/admin/products/${product.id}/${kind}`, body);
       onSaved?.();
