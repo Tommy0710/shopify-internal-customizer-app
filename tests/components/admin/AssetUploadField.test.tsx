@@ -3,11 +3,10 @@ import "@testing-library/jest-dom/vitest";
 import { useState, type ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AppProvider } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
 import { mockAdminFetchResponses, stubAppBridge } from "@/lib/admin-ui/testFetch";
 import { AssetUploadField } from "@/components/admin/AssetUploadField";
 import type { AdminUploadKind, AssetDto } from "@/lib/admin/assets";
+import { renderWithPolaris } from "../../helpers/renderWithPolaris";
 
 afterEach(() => {
   cleanup();
@@ -15,9 +14,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderWithPolaris(ui: ReactElement) {
-  return render(<AppProvider i18n={enTranslations}>{ui}</AppProvider>);
-}
 
 function ControlledAssetField({
   kind,

@@ -2,9 +2,8 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { AppProvider } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
 import { AdminErrorBoundary, AdminShell } from "@/components/admin/AdminShell";
+import { renderWithPolaris } from "../../helpers/renderWithPolaris";
 
 function Bomb(): never {
   throw new Error("lỗi giả lập trong tab");
@@ -35,11 +34,18 @@ describe("AdminShell", () => {
     render(<AdminShell />);
 
     expect(tablist().getByRole("tab", { name: "Attributes" })).toHaveAttribute("aria-selected", "true");
+    // Không chỉ kiểm aria-selected — kiểm cả NỘI DUNG panel thật sự đổi. Review
+    // Task 1 chỉ ra bản trước chỉ assert trạng thái tab, một off-by-one trong
+    // nhánh render nội dung sẽ không bị bắt.
+    expect(screen.getByText("Attributes — sẽ có ở Task 3.")).toBeInTheDocument();
+    expect(screen.queryByText("Products — sẽ có ở Task 4.")).not.toBeInTheDocument();
 
     fireEvent.click(tablist().getByRole("tab", { name: "Products" }));
 
     expect(tablist().getByRole("tab", { name: "Products" })).toHaveAttribute("aria-selected", "true");
     expect(tablist().getByRole("tab", { name: "Attributes" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("Products — sẽ có ở Task 4.")).toBeInTheDocument();
+    expect(screen.queryByText("Attributes — sẽ có ở Task 3.")).not.toBeInTheDocument();
   });
 
   it("không ném lỗi khi window.shopify undefined lúc mount, và không tự gọi idToken()", () => {
@@ -59,12 +65,10 @@ describe("AdminErrorBoundary", () => {
   it("bắt lỗi render của con, hiển thị fallback thay vì crash cả cây", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    render(
-      <AppProvider i18n={enTranslations}>
-        <AdminErrorBoundary>
-          <Bomb />
-        </AdminErrorBoundary>
-      </AppProvider>,
+    renderWithPolaris(
+      <AdminErrorBoundary>
+        <Bomb />
+      </AdminErrorBoundary>,
     );
 
     expect(screen.getByText(/lỗi giả lập trong tab/)).toBeInTheDocument();
@@ -72,12 +76,10 @@ describe("AdminErrorBoundary", () => {
   });
 
   it("không có lỗi → render con bình thường", () => {
-    render(
-      <AppProvider i18n={enTranslations}>
-        <AdminErrorBoundary>
-          <p>nội dung bình thường</p>
-        </AdminErrorBoundary>
-      </AppProvider>,
+    renderWithPolaris(
+      <AdminErrorBoundary>
+        <p>nội dung bình thường</p>
+      </AdminErrorBoundary>,
     );
     expect(screen.getByText("nội dung bình thường")).toBeInTheDocument();
   });

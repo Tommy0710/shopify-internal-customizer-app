@@ -3,20 +3,14 @@ import "@testing-library/jest-dom/vitest";
 import { useState, type ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { AppProvider } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
+
 import { PriceField } from "@/components/admin/PriceField";
+import { renderWithPolaris } from "../../helpers/renderWithPolaris";
 
 afterEach(() => {
   cleanup();
 });
 
-// Mọi TextField Polaris cần `useI18n()`, chỉ có khi cây bọc trong
-// `<AppProvider>` (xem `AdminShell.tsx` — trong app thật, `AdminShell` là
-// AppProvider duy nhất; test component lẻ tự bọc lại một bản mỏng).
-function renderWithPolaris(ui: ReactElement) {
-  return render(<AppProvider i18n={enTranslations}>{ui}</AppProvider>);
-}
 
 /**
  * Wrapper mô phỏng đúng cách một màn hình thật (Task 3+) sẽ dùng PriceField:
