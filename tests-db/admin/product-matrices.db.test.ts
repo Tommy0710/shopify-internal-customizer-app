@@ -538,6 +538,94 @@ describe("Product matrices — Postgres thật (Task 6)", () => {
       expect(body.readiness).toEqual({ ready: true, problems: [] });
     });
 
+    // Review Task 6 phát hiện: archive asset SVG SAU khi đã wire vào ô active
+    // không tự sinh MISSING_SVG — ô vẫn "có mặt". Bằng chứng thực thi trên
+    // đúng cây ready:true ở trên, không phải cây dựng tay trong hermetic test.
+    it("archive svgAssetId SAU khi đã wire vào ô active → readiness.ready trở lại false, ARCHIVED_ATTRIBUTE đúng path", async () => {
+      const shop = await seedShop();
+      const { product, style, animal, leather, svgAsset } = await buildFullProduct(shop.id);
+
+      const productStyle = await db.productStyle.findFirstOrThrow({ where: { productId: product.id, styleId: style.id } });
+      const productAnimal = await db.productAnimal.findFirstOrThrow({ where: { productId: product.id, animalId: animal.id } });
+      await db.productStyleLeather.updateMany({
+        where: { productStyleId: productStyle.id, leatherId: leather.id },
+        data: { shopifyVariantId: "sv-1", shopifyVariantGid: "gid://shopify/ProductVariant/1", variantMissing: false },
+      });
+      await db.animalLeather.updateMany({
+        where: { productAnimalId: productAnimal.id, leatherId: leather.id },
+        data: { shopifyVariantId: "sv-2", shopifyVariantGid: "gid://shopify/ProductVariant/2", variantMissing: false },
+      });
+
+      // Xác nhận trạng thái xuất phát THẬT sự là ready:true trước khi archive.
+      const before = await productGet(await adminRequest(`https://app.test/api/admin/products/${product.id}`), {
+        params: { id: product.id },
+      });
+      expect((await json(before)).readiness).toEqual({ ready: true, problems: [] });
+
+      await db.asset.update({ where: { id: svgAsset.id }, data: { archivedAt: new Date() } });
+
+      const after = await productGet(await adminRequest(`https://app.test/api/admin/products/${product.id}`), {
+        params: { id: product.id },
+      });
+      const afterBody = await json(after);
+      expect(afterBody.readiness.ready).toBe(false);
+      expect(afterBody.readiness.problems).toContainEqual(
+        expect.objectContaining({
+          code: "ARCHIVED_ATTRIBUTE",
+          path: ["styles", style.id, "animals", animal.id],
+        }),
+      );
+
+      // isEnabled:true phải bị chặn ngay khi asset archived, dù trước đó ready.
+      const patchReq = await adminRequest(`https://app.test/api/admin/products/${product.id}`, {
+        method: "PATCH",
+        body: { isEnabled: true },
+      });
+      const patchRes = await productPatch(patchReq, { params: { id: product.id } });
+      expect(patchRes.status).toBe(409);
+    });
+
+    it("archive defaultStitchId SAU khi đã wire vào ô active → readiness.ready trở lại false", async () => {
+      const shop = await seedShop();
+      const { product, style, animal, leather, svgAsset, stitch } = await buildFullProduct(shop.id);
+      // buildFullProduct đã activate stitch cho product này (productStitch) —
+      // giờ wire chính nó làm defaultStitchId của ô SVG đã có.
+      await putStyleAnimals(
+        await adminRequest(`https://app.test/api/admin/products/${product.id}/styles/${style.id}/animals`, {
+          method: "PUT",
+          body: [{ animalId: animal.id, svgAssetId: svgAsset.id, defaultStitchId: stitch.id, isActive: true, sortOrder: 0 }],
+        }),
+        { params: { id: product.id, styleId: style.id } },
+      );
+
+      const productStyle = await db.productStyle.findFirstOrThrow({ where: { productId: product.id, styleId: style.id } });
+      const productAnimal = await db.productAnimal.findFirstOrThrow({ where: { productId: product.id, animalId: animal.id } });
+      await db.productStyleLeather.updateMany({
+        where: { productStyleId: productStyle.id, leatherId: leather.id },
+        data: { shopifyVariantId: "sv-1", shopifyVariantGid: "gid://shopify/ProductVariant/1", variantMissing: false },
+      });
+      await db.animalLeather.updateMany({
+        where: { productAnimalId: productAnimal.id, leatherId: leather.id },
+        data: { shopifyVariantId: "sv-2", shopifyVariantGid: "gid://shopify/ProductVariant/2", variantMissing: false },
+      });
+
+      const before = await productGet(await adminRequest(`https://app.test/api/admin/products/${product.id}`), {
+        params: { id: product.id },
+      });
+      expect((await json(before)).readiness).toEqual({ ready: true, problems: [] });
+
+      await db.stitch.update({ where: { id: stitch.id }, data: { archivedAt: new Date() } });
+
+      const after = await productGet(await adminRequest(`https://app.test/api/admin/products/${product.id}`), {
+        params: { id: product.id },
+      });
+      const afterBody = await json(after);
+      expect(afterBody.readiness.ready).toBe(false);
+      expect(afterBody.readiness.problems).toContainEqual(
+        expect.objectContaining({ code: "ARCHIVED_ATTRIBUTE", path: ["styles", style.id, "animals", animal.id] }),
+      );
+    });
+
     it("PATCH { isEnabled: true } khi chưa sẵn sàng → 409 NOT_READY, DB isEnabled vẫn false", async () => {
       const shop = await seedShop();
       const { product } = await buildFullProduct(shop.id);

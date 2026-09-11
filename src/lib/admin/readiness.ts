@@ -41,6 +41,10 @@ export interface ReadinessPriceCell {
 export interface ReadinessStyleAnimalCell {
   animalId: string;
   isActive: boolean;
+  /** Asset SVG_MOCKUP mà ô này trỏ tới đã bị archive. */
+  svgAssetArchived: boolean;
+  /** `defaultStitchId` (nếu có) trỏ tới một Stitch đã bị archive. */
+  defaultStitchArchived: boolean;
 }
 
 export interface ReadinessStyle {
@@ -167,15 +171,34 @@ export function productReadiness(tree: ProductReadinessTree): { ready: boolean; 
     }
   }
 
-  // Lưới SVG: mỗi cặp (style active × animal active) phải có một ô SVG active.
+  // Lưới SVG: mỗi cặp (style active × animal active) phải có một ô SVG active,
+  // và asset/stitch mặc định mà ô đó trỏ tới không được archived — một mockup
+  // hay stitch mặc định bị archive SAU khi đã wire vào ô active không tự sinh
+  // MISSING_SVG (ô vẫn "có mặt"), nên cần kiểm riêng.
   for (const style of activeStyles) {
     for (const animal of activeAnimals) {
-      const hasSvg = style.animals.some((cell) => cell.animalId === animal.animalId && cell.isActive);
-      if (!hasSvg) {
+      const cell = style.animals.find((c) => c.animalId === animal.animalId && c.isActive);
+      const path = ["styles", style.styleId, "animals", animal.animalId];
+      if (!cell) {
         problems.push({
           code: "MISSING_SVG",
           message: `Cặp style ${style.styleId} × animal ${animal.animalId} chưa có SVG mockup`,
-          path: ["styles", style.styleId, "animals", animal.animalId],
+          path,
+        });
+        continue;
+      }
+      if (cell.svgAssetArchived) {
+        problems.push({
+          code: "ARCHIVED_ATTRIBUTE",
+          message: `SVG mockup của cặp style ${style.styleId} × animal ${animal.animalId} đã bị archive`,
+          path,
+        });
+      }
+      if (cell.defaultStitchArchived) {
+        problems.push({
+          code: "ARCHIVED_ATTRIBUTE",
+          message: `Stitch mặc định của cặp style ${style.styleId} × animal ${animal.animalId} đã bị archive`,
+          path,
         });
       }
     }

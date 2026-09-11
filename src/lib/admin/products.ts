@@ -70,9 +70,13 @@ export interface StyleAnimalCellDto {
   name: string;
   svgAssetId: string;
   svgUrl: string;
+  /** Asset SVG_MOCKUP đã bị archive kể từ khi được wire vào ô này (readiness cần biết). */
+  svgAssetArchived: boolean;
   displayLabel: string | null;
   description: string | null;
   defaultStitchId: string | null;
+  /** Stitch mặc định đã bị archive kể từ khi được wire vào ô này. `false` khi defaultStitchId null. */
+  defaultStitchArchived: boolean;
   isActive: boolean;
   sortOrder: number;
 }
@@ -195,10 +199,11 @@ function toStyleAnimalCellDto(row: {
   animalId: string;
   animal: { name: string };
   svgAssetId: string;
-  svgAsset: { publicUrl: string };
+  svgAsset: { publicUrl: string; archivedAt: Date | null };
   displayLabel: string | null;
   description: string | null;
   defaultStitchId: string | null;
+  defaultStitch: { archivedAt: Date | null } | null;
   isActive: boolean;
   sortOrder: number;
 }): StyleAnimalCellDto {
@@ -207,9 +212,11 @@ function toStyleAnimalCellDto(row: {
     name: row.animal.name,
     svgAssetId: row.svgAssetId,
     svgUrl: row.svgAsset.publicUrl,
+    svgAssetArchived: row.svgAsset.archivedAt != null,
     displayLabel: row.displayLabel,
     description: row.description,
     defaultStitchId: row.defaultStitchId,
+    defaultStitchArchived: row.defaultStitch?.archivedAt != null,
     isActive: row.isActive,
     sortOrder: row.sortOrder,
   };
@@ -287,7 +294,10 @@ export async function buildProductTree(tx: Tx, product: CustomizableProduct): Pr
       include: {
         style: true,
         styleLeathers: { include: { leather: true }, orderBy: { sortOrder: "asc" } },
-        styleAnimals: { include: { animal: true, svgAsset: true }, orderBy: { sortOrder: "asc" } },
+        styleAnimals: {
+          include: { animal: true, svgAsset: true, defaultStitch: true },
+          orderBy: { sortOrder: "asc" },
+        },
       },
       orderBy: { sortOrder: "asc" },
     }),
@@ -861,7 +871,7 @@ async function putStyleAnimals(req: NextRequest, ctx: AdminApiContext<{ id: stri
 
     return tx.productStyleAnimal.findMany({
       where: { productStyleId: productStyle.id },
-      include: { animal: true, svgAsset: true },
+      include: { animal: true, svgAsset: true, defaultStitch: true },
       orderBy: { sortOrder: "asc" },
     });
   });

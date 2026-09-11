@@ -29,7 +29,7 @@ function fullTree(overrides: Partial<ProductReadinessTree> = {}): ProductReadine
         isActive: true,
         archived: false,
         leathers: [fullPriceCell({ leatherId: "lth_style" })],
-        animals: [{ animalId: "ani_1", isActive: true }],
+        animals: [{ animalId: "ani_1", isActive: true, svgAssetArchived: false, defaultStitchArchived: false }],
       },
     ],
     animals: [
@@ -139,7 +139,7 @@ describe("productReadiness — thuần, không chạm DB", () => {
 
   it("MISSING_SVG: ô SVG tồn tại nhưng isActive: false vẫn tính là thiếu", () => {
     const tree = fullTree();
-    tree.styles[0].animals = [{ animalId: "ani_1", isActive: false }];
+    tree.styles[0].animals = [{ animalId: "ani_1", isActive: false, svgAssetArchived: false, defaultStitchArchived: false }];
     const result = productReadiness(tree);
     expect(result.problems).toContainEqual(
       expect.objectContaining({ code: "MISSING_SVG", path: ["styles", "sty_1", "animals", "ani_1"] }),
@@ -180,6 +180,40 @@ describe("productReadiness — thuần, không chạm DB", () => {
     expect(result.problems).toContainEqual(
       expect.objectContaining({ code: "ARCHIVED_ATTRIBUTE", path: ["styles", "sty_1", "leathers", "lth_style"] }),
     );
+  });
+
+  // Review Task 6 phát hiện: một mockup SVG hay stitch mặc định bị archive SAU
+  // khi đã wire vào ô active không tự sinh MISSING_SVG (ô "vẫn có mặt"), nên
+  // hai ca dưới đây từng lọt qua readiness với ready:true.
+  it("ARCHIVED_ATTRIBUTE: ô SVG active trỏ tới asset SVG_MOCKUP đã archived", () => {
+    const tree = fullTree();
+    tree.styles[0].animals = [
+      { animalId: "ani_1", isActive: true, svgAssetArchived: true, defaultStitchArchived: false },
+    ];
+    const result = productReadiness(tree);
+    expect(result.problems).toContainEqual(
+      expect.objectContaining({ code: "ARCHIVED_ATTRIBUTE", path: ["styles", "sty_1", "animals", "ani_1"] }),
+    );
+  });
+
+  it("ARCHIVED_ATTRIBUTE: ô SVG active trỏ tới defaultStitchId đã archived", () => {
+    const tree = fullTree();
+    tree.styles[0].animals = [
+      { animalId: "ani_1", isActive: true, svgAssetArchived: false, defaultStitchArchived: true },
+    ];
+    const result = productReadiness(tree);
+    expect(result.problems).toContainEqual(
+      expect.objectContaining({ code: "ARCHIVED_ATTRIBUTE", path: ["styles", "sty_1", "animals", "ani_1"] }),
+    );
+  });
+
+  it("ô SVG active, không archive gì — không sinh ARCHIVED_ATTRIBUTE cho ô đó (không false positive)", () => {
+    const tree = fullTree();
+    const result = productReadiness(tree);
+    const svgProblems = result.problems.filter(
+      (p) => p.path[0] === "styles" && p.path[2] === "animals",
+    );
+    expect(svgProblems).toEqual([]);
   });
 
   it("isActive: false không bao giờ sinh problem — style tắt, thiếu mọi thứ, vẫn ready", () => {
