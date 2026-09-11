@@ -8,9 +8,11 @@ import { GET as leathersList, POST as leathersCreate } from "@/app/api/admin/lea
 import { PATCH as leatherPatch, DELETE as leatherArchive } from "@/app/api/admin/leathers/[id]/route";
 import { POST as leathersReorder } from "@/app/api/admin/leathers/reorder/route";
 import { GET as stitchesList, POST as stitchesCreate } from "@/app/api/admin/stitches/route";
+import { PATCH as stitchPatch, DELETE as stitchArchive } from "@/app/api/admin/stitches/[id]/route";
 import { GET as animalsList, POST as animalsCreate } from "@/app/api/admin/animals/route";
 import { PATCH as animalPatch, DELETE as animalArchive } from "@/app/api/admin/animals/[id]/route";
 import { GET as stylesList, POST as stylesCreate } from "@/app/api/admin/styles/route";
+import { PATCH as stylePatch, DELETE as styleArchive } from "@/app/api/admin/styles/[id]/route";
 
 async function json(res: Response): Promise<any> {
   return res.json();
@@ -315,6 +317,131 @@ describe("Attributes API — Postgres thật", () => {
       const row = await db.leather.findUniqueOrThrow({ where: { id: leather.id } });
       expect(row.name).toBe("A");
       expect(row.archivedAt).toBeNull();
+    });
+  });
+
+  describe("cô lập shop — cả bốn nhóm (khoảng trống review Task 4 phát hiện)", () => {
+    // Bảng review chưa lưu lại: leather đã có test riêng; ba nhóm còn lại và
+    // PATCH-time asset re-validation chỉ chạy như scratch rồi bị xoá. Giữ ở
+    // đây để lỗ hổng không quay lại lần thứ hai không ai để ý.
+    it.each([
+      {
+        group: "stitches",
+        patch: stitchPatch,
+        del: stitchArchive,
+        field: "colorHex" as const,
+        create: async (shopId: string) =>
+          db.stitch.create({ data: { shopId, name: "A", slug: "a", colorHex: "#000000" } }),
+      },
+      {
+        group: "animals",
+        patch: animalPatch,
+        del: animalArchive,
+        field: "name" as const,
+        create: async (shopId: string) => {
+          const display = await seedAsset(shopId, "DISPLAY");
+          return db.animal.create({ data: { shopId, name: "A", slug: "a", displayImageAssetId: display.id } });
+        },
+      },
+      {
+        group: "styles",
+        patch: stylePatch,
+        del: styleArchive,
+        field: "name" as const,
+        create: async (shopId: string) => {
+          const display = await seedAsset(shopId, "DISPLAY");
+          return db.style.create({ data: { shopId, name: "A", slug: "a", displayImageAssetId: display.id } });
+        },
+      },
+    ])("$group: token shop B PATCH/DELETE hàng của shop A → 404, hàng của A không đổi", async ({ group, patch, del, create }) => {
+      useAdminEnv([TEST_SHOP, "other-shop.myshopify.com"]);
+      const shopA = await seedShop(TEST_SHOP);
+      await seedShop("other-shop.myshopify.com");
+      const row = await create(shopA.id);
+
+      const patchReq = await adminRequest(`https://app.test/api/admin/${group}/${row.id}`, {
+        method: "PATCH",
+        body: { name: "hacked" },
+        shop: "other-shop.myshopify.com",
+      });
+      const patchRes = await (patch as any)(patchReq, { params: { id: row.id } });
+      expect(patchRes.status, group).toBe(404);
+
+      const delReq = await adminRequest(`https://app.test/api/admin/${group}/${row.id}`, {
+        method: "DELETE",
+        shop: "other-shop.myshopify.com",
+      });
+      const delRes = await (del as any)(delReq, { params: { id: row.id } });
+      expect(delRes.status, group).toBe(404);
+    });
+  });
+
+  describe("PATCH re-validate asset ref cùng shop — không thể gắn asset shop khác qua update", () => {
+    it("leather PATCH textureImageAssetId sang asset của shop khác → 422 invalid_asset, cột không đổi", async () => {
+      useAdminEnv([TEST_SHOP, "other-shop.myshopify.com"]);
+      const shopA = await seedShop(TEST_SHOP);
+      const shopB = await seedShop("other-shop.myshopify.com");
+      const display = await seedAsset(shopA.id, "DISPLAY");
+      const textureA = await seedAsset(shopA.id, "TEXTURE");
+      const textureB = await seedAsset(shopB.id, "TEXTURE");
+      const leather = await db.leather.create({
+        data: { shopId: shopA.id, name: "A", slug: "a", displayImageAssetId: display.id, textureImageAssetId: textureA.id },
+      });
+
+      const req = await adminRequest(`https://app.test/api/admin/leathers/${leather.id}`, {
+        method: "PATCH",
+        body: { textureImageAssetId: textureB.id },
+      });
+      const res = await leatherPatch(req, { params: { id: leather.id } });
+      expect(res.status).toBe(422);
+
+      const row = await db.leather.findUniqueOrThrow({ where: { id: leather.id } });
+      expect(row.textureImageAssetId).toBe(textureA.id);
+    });
+  });
+
+  describe("archive idempotent — archivedAt KHÔNG đổi lần thứ hai", () => {
+    it("archive lần hai giữ nguyên archivedAt (không refresh timestamp)", async () => {
+      const shop = await seedShop();
+      const display = await seedAsset(shop.id, "DISPLAY");
+      const style = await db.style.create({ data: { shopId: shop.id, name: "A", slug: "a", displayImageAssetId: display.id } });
+
+      const req1 = await adminRequest(`https://app.test/api/admin/styles/${style.id}`, { method: "DELETE" });
+      await styleArchive(req1, { params: { id: style.id } });
+      const first = await db.style.findUniqueOrThrow({ where: { id: style.id } });
+      expect(first.archivedAt).not.toBeNull();
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      const req2 = await adminRequest(`https://app.test/api/admin/styles/${style.id}`, { method: "DELETE" });
+      const res2 = await styleArchive(req2, { params: { id: style.id } });
+      expect(res2.status).toBe(200);
+      const second = await db.style.findUniqueOrThrow({ where: { id: style.id } });
+      expect(second.archivedAt?.getTime()).toBe(first.archivedAt?.getTime());
+    });
+  });
+
+  describe("reorder — hàng archived trộn với active", () => {
+    it("orderedIds chứa id của hàng đã archived → 409 STALE_ORDER (chỉ hàng active mới hợp lệ)", async () => {
+      const shop = await seedShop();
+      const display = await seedAsset(shop.id, "DISPLAY");
+      const [active, archived] = await Promise.all([
+        db.style.create({ data: { shopId: shop.id, name: "Active", slug: "active", displayImageAssetId: display.id } }),
+        db.style.create({
+          data: { shopId: shop.id, name: "Archived", slug: "archived", displayImageAssetId: display.id, archivedAt: new Date() },
+        }),
+      ]);
+
+      const req = await adminRequest("https://app.test/api/admin/styles/reorder", {
+        method: "POST",
+        body: { orderedIds: [active.id, archived.id] },
+      });
+      const { POST: stylesReorder } = await import("@/app/api/admin/styles/reorder/route");
+      const res = await stylesReorder(req);
+      expect(res.status).toBe(409);
+
+      const row = await db.style.findUniqueOrThrow({ where: { id: active.id } });
+      expect(row.sortOrder).toBe(0); // không bị ghi đè
     });
   });
 
