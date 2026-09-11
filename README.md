@@ -258,7 +258,8 @@ npm run dev
 | `npm run build` | `prisma generate` → `bundle:extension` → `next build` (đây là lệnh Vercel chạy) |
 | `npm run bundle:extension` | Build lại widget storefront |
 | `npm run shopify:deploy` | Đẩy config app + theme extension lên Shopify |
-| `npm test` | Vitest (`vitest run`) — 411+ test, `tests/` |
+| `npm test` | Vitest hermetic (`vitest run`) — không chạm DB, `tests/` |
+| `npm run test:db` | Vitest chống Postgres thật, `tests-db/` — **cần Docker chạy**; tự dựng container tạm, từ chối mọi host không phải localhost |
 
 Truy cập: shell admin tạm thời (chờ P2) tại `http://localhost:3000`, xem trước widget tại `http://localhost:3000/storefront-preview`.
 

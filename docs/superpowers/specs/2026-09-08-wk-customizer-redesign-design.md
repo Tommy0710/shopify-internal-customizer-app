@@ -652,78 +652,141 @@ Attribute không bao giờ hard-delete. `CustomDesignSelection.attributeId` là 
 
 ### 8.1. Admin — `/api/admin/*`
 
-**Auth:** `Authorization: Bearer <App Bridge session token>`. Middleware verify chữ ký HS256 bằng `SHOPIFY_API_SECRET`, `aud === SHOPIFY_API_KEY`, `dest` là shop đã cài, `exp` còn hạn. Thêm **shop allowlist** vì app internal. `sub` claim dùng làm `createdBy` / `statusUpdatedBy`.
+**Trạng thái (P2a, đã ship thật — verify trực tiếp trên code trước khi sửa mục này):** attribute CRUD, asset upload, product config (hosts/styles/animals/stitches + ma trận giá + lưới SVG), readiness — đã viết và có test (`npm test` + `npm run test:db`). **Chưa viết**: Shopify passthrough + sinh variant (P2b), designs & production queue (P2c) — đánh dấu riêng bên dưới.
+
+**Auth — hai lớp wrapper bắt buộc**, `export const GET = withAdminSession(adminApi(handler))` (chi tiết ở CLAUDE.md mục "Route admin"): `withAdminSession` verify chữ ký HS256 App Bridge session token bằng `SHOPIFY_API_SECRET`, `aud === SHOPIFY_API_KEY`, đối chiếu `dest`/`iss` với **shop allowlist** `WK_ALLOWED_SHOPS` — 401 (token sai/thiếu/hết hạn) hoặc 403 (shop ngoài allowlist). `adminApi` (lớp trong) tra `Shop` theo `session.shopDomain` — 409 `SHOP_NOT_INSTALLED` nếu chưa cài/đã gỡ — rồi mới gọi handler nghiệp vụ; nó cũng bắt `AdminHttpError` và lỗi Prisma đã biết, dịch thành hai hình lỗi dưới đây.
+
+**Hai hình lỗi duy nhất** (`src/lib/admin/http.ts`): `422` → `{ errors: [{ field, code, message }] }`; mọi mã khác → `{ error: "<CODE>", ...extra }`. Không route nào tự dựng hình lỗi riêng.
 
 ```
-# Attributes — 4 nhóm cùng shape
-GET    /api/admin/leathers?includeArchived=false
-POST   /api/admin/leathers
-PATCH  /api/admin/leathers/:id
-DELETE /api/admin/leathers/:id                  → set archivedAt
-POST   /api/admin/leathers/reorder              { orderedIds: [] }
-   … /stitches  /animals  /styles
+# Attributes — 4 nhóm cùng shape: leathers · stitches · animals · styles
+GET    /api/admin/leathers?includeArchived=false   → { items: AttributeDto[] }
+POST   /api/admin/leathers                          → 201 AttributeDto
+PATCH  /api/admin/leathers/:id                       → AttributeDto
+                                                        { archived: true }  → archive (archivedAt = now, IDEMPOTENT:
+                                                                              gọi lại không ghi đè archivedAt cũ)
+                                                        { archived: false } → khôi phục (archivedAt = null)
+DELETE /api/admin/leathers/:id                       → AttributeDto — alias của PATCH { archived: true }.
+                                                        KHÔNG hard-delete hàng; khôi phục lại bằng PATCH { archived: false }.
+POST   /api/admin/leathers/reorder   { orderedIds: string[] }  → { ok: true }
+                                                        409 STALE_ORDER nếu orderedIds không phải ĐÚNG BẰNG tập id
+                                                        đang active hiện có — thiếu/thừa/trùng đều bị từ chối,
+                                                        không đoán ý người dùng.
+   … /stitches  /animals  /styles — cùng 4 route trên, khác field bắt buộc theo nhóm (xem dưới)
 
 # Assets
-POST   /api/admin/assets                        multipart; server sanitize SVG rồi mới lưu
-                                                → { assetId, publicUrl, validation? }
-POST   /api/admin/assets/validate-svg           dry-run, không lưu
+POST   /api/admin/assets                 multipart: file, kind ∈ SVG_MOCKUP|DISPLAY|TEXTURE
+                                          → 201 (mới) / 200 (trùng checksum, dedupe theo shopId+kind+sha256)
+                                            { asset, created, validation?, sanitization? }
+POST   /api/admin/assets/validate-svg    multipart: file — dry-run, KHÔNG lưu gì
+                                          → { valid, validation, sanitization, externalRefs, embeddedRefs }
 
-# Shopify passthrough (server giữ accessToken)
+# Shopify passthrough (server giữ accessToken) — CHƯA VIẾT, P2b
 GET    /api/admin/shopify/products?q=
 GET    /api/admin/shopify/products/:id/variants
 
-# Product config
-GET    /api/admin/products
-POST   /api/admin/products                      { name }
-GET    /api/admin/products/:id                  → full tree
-PATCH  /api/admin/products/:id                  { isEnabled }
-PUT    /api/admin/products/:id/hosts            [{ shopifyProductId, preselectStyleId, isPrimary }]
-PUT    /api/admin/products/:id/styles           [{ styleId, isActive, sortOrder }]
-PUT    /api/admin/products/:id/animals          [{ animalId, isActive, sortOrder }]
-PUT    /api/admin/products/:id/stitches         [{ stitchId, isActive, sortOrder }]
+# Product config — ĐÃ VIẾT, P2a
+GET    /api/admin/products                          → { items: ProductSummaryDto[] }
+POST   /api/admin/products                { name }   → 201 ProductSummaryDto
+GET    /api/admin/products/:id                       → ProductTreeDto — PHẲNG (xem ghi chú ngay dưới bảng này)
+PATCH  /api/admin/products/:id           { name?, isEnabled? }
+                                                        isEnabled: true → dựng lại cây, chạy readiness; chưa sẵn
+                                                        sàng → 409 NOT_READY { problems: ReadinessProblem[] }.
+                                                        isEnabled: false KHÔNG BAO GIỜ bị chặn (tắt khẩn cấp).
+PUT    /api/admin/products/:id/hosts     [{ shopifyProductId, preselectStyleId?, isPrimary }]
+                                                        ★ NGOẠI LỆ R4 duy nhất: phần tử vắng mặt khỏi danh sách
+                                                        → hàng bị XOÁ thật, không chỉ tắt. shopifyProductId đã
+                                                        gắn product khác trong cùng shop → 409 HOST_TAKEN
+                                                        { shopifyProductId, productId }.
+PUT    /api/admin/products/:id/styles    [{ styleId, isActive, sortOrder }]
+PUT    /api/admin/products/:id/animals   [{ animalId, isActive, sortOrder }]
+PUT    /api/admin/products/:id/stitches  [{ stitchId, isActive, sortOrder }]
+                                                        R4: vắng mặt khỏi danh sách → isActive=false, hàng VẪN CÒN
+                                                        (đưa lại đúng khoá đó sau → bật lại, tái dùng cùng hàng).
 PUT    /api/admin/products/:id/styles/:styleId/leathers
-                                                [{ leatherId, price, isActive, sortOrder }]
+                                         [{ leatherId, price, isActive, sortOrder }]
 PUT    /api/admin/products/:id/animals/:animalId/leathers
-                                                [{ leatherId, price, isActive, sortOrder }]
+                                         [{ leatherId, price, isActive, sortOrder }]
+                                                        Cùng ngữ nghĩa R4. `price` là CHUỖI "80.00" (không phải
+                                                        number — xem CLAUDE.md mục tiền). KHÔNG BAO GIỜ đụng
+                                                        shopifyVariantId/variantPriceSnapshot (cột của P2b).
 PUT    /api/admin/products/:id/styles/:styleId/animals
-                                                [{ animalId, svgAssetId, displayLabel,
-                                                   description, defaultStitchId, isActive, sortOrder }]
+                                         [{ animalId, svgAssetId, displayLabel,
+                                            description, defaultStitchId, isActive, sortOrder }]
+                                                        Lưới SVG: mỗi cặp style×animal active cần đúng 1 ô active.
 
-# Sinh variant
-POST   /api/admin/products/:id/variants/preview  → { matrixA:{count, packing, products[]},
-                                                     matrixB:{…} }
+# Sinh variant — CHƯA VIẾT, P2b
+POST   /api/admin/products/:id/variants/preview  → { matrixA:{count, packing, products[]}, matrixB:{…} }
 POST   /api/admin/products/:id/variants/generate → chạy productSet, ghi ngược variant id
 POST   /api/admin/products/:id/variants/sync     → refresh snapshot giá/title, phát hiện mồ côi
 
-# Designs & production
+# Designs & production — CHƯA VIẾT, P2c
 GET    /api/admin/designs?status=&productionStatus=&orderName=&flagged=true
 GET    /api/admin/designs/:id
 PATCH  /api/admin/order-lines/:id                { productionStatus, productionNotes }
 ```
 
-Dùng `PUT` cho quan hệ: admin gửi **toàn bộ** danh sách mong muốn, server diff. Tránh trạng thái nửa vời khi network fail và khớp với UI (checkbox + drag sort → lưu một lần).
+`AttributeDto`: `{ id, name, slug, isActive, sortOrder, archivedAt, displayImage: {assetId,url}|null, textureImage?, colorHex? }`. `textureImage` chỉ có ở leathers; `colorHex` chỉ ở stitches. Field bắt buộc lúc tạo (`POST`) khác theo nhóm: leathers cần cả `displayImageAssetId` + `textureImageAssetId`; stitches cần `colorHex` (`displayImageAssetId` tuỳ chọn); animals/styles chỉ cần `displayImageAssetId`. Asset ref sai vì bất kỳ lý do gì (không tồn tại, sai shop, sai `kind`, đã archive) → luôn 422 `invalid_asset` — một mã lỗi cho mọi lý do, không phân biệt được từ response (đúng yêu cầu không tiết lộ dữ liệu shop khác).
+
+**`GET /api/admin/products/:id` — `ProductTreeDto`, hình PHẲNG, không lồng dưới khoá `"product"`** (ruling P2a đã CHỐT — khác với ví dụ ở §8.2 `GET /apps/customizer/config`, một route storefront hoàn toàn khác đang trả `{ "product": {...} }`; nếu tài liệu nội bộ nào khác còn mô tả endpoint admin này lồng dưới `"product"`, đó là chép nhầm từ §8.2 — nguồn sự thật là `ProductTreeDto` ở `src/lib/admin/products.ts`):
+
+```jsonc
+{
+  "id": "cfg_…", "name": "Custom Animal Card Holder", "isEnabled": false,
+  "createdAt": "…", "updatedAt": "…",
+  "hosts":    [ { "id", "shopifyProductId", "shopifyProductGid", "handleSnapshot",
+                  "titleSnapshot", "preselectStyleId", "isPrimary", "syncedAt" } ],
+  "styles":   [ { "styleId", "name", "isActive", "sortOrder", "archived",
+                  "leathers": [ PriceCellDto ], "animals": [ StyleAnimalCellDto ] } ],
+  "animals":  [ { "animalId", "name", "isActive", "sortOrder", "archived", "leathers": [ PriceCellDto ] } ],
+  "stitches": [ { "stitchId", "name", "colorHex", "isActive", "sortOrder", "archived" } ],
+  "readiness": { "ready": false, "problems": [ { "code", "message", "path": [] } ] }
+}
+```
+
+`PriceCellDto`: `{ leatherId, name, price: string|null, isActive, sortOrder, archived, variant: PriceCellVariantDto|null }` — `variant` luôn `null` cho tới khi P2b (variant sync) ghi cột. `StyleAnimalCellDto` thêm `svgAssetId, svgUrl, svgAssetArchived, displayLabel, description, defaultStitchId, defaultStitchArchived`.
+
+**`ReadinessCode`** (`src/lib/admin/readiness.ts`) — chỉ xét phần tử **active**; một hàng `isActive:false` không bao giờ sinh problem (tắt là cách "sửa"):
+`NO_HOST` · `NO_ACTIVE_STYLE` · `NO_ACTIVE_ANIMAL` · `NO_ACTIVE_STITCH` · `STYLE_WITHOUT_LEATHER` · `ANIMAL_WITHOUT_LEATHER` · `MISSING_PRICE` · `MISSING_VARIANT` · `VARIANT_MISSING` · `MISSING_SVG` · `ARCHIVED_ATTRIBUTE`.
+`ARCHIVED_ATTRIBUTE` phủ hai trường hợp, đừng đánh giá thấp danh sách này: (1) một style/animal/stitch/leather-cell đang active nhưng attribute nó trỏ tới đã bị archive; (2) **ô lưới SVG** (`ProductStyleAnimal.svgAssetId`/`defaultStitchId`) trỏ tới một asset SVG_MOCKUP hoặc stitch mặc định đã bị archive SAU KHI đã wire vào ô active — trường hợp này không tự sinh `MISSING_SVG` vì ô "vẫn có mặt" trong cây, nên phải kiểm riêng (thêm ở một vá lỗi sau review Task 6).
+
+**Mã lỗi nghiệp vụ hay gặp ở nhóm Product:** 409 `HOST_TAKEN`, 409 `NOT_READY`, 409 `STALE_ORDER` (reorder attribute), 409 `SHOP_NOT_INSTALLED` (tầng `adminApi`), 422 `invalid_reference` (id style/animal/stitch/leather trong body `PUT` sai shop hoặc đã archive — kiểm MỘT LẦN cho toàn bộ danh sách trước khi ghi bất cứ gì), cộng 409/404 dịch tự động từ Prisma P2002/P2003/P2025 (`CONFLICT { fields }` / `IN_USE` / `NOT_FOUND`).
+
+Dùng `PUT` cho quan hệ: admin gửi **toàn bộ** danh sách mong muốn, server diff bằng khoá (`diffByKey`). Tránh trạng thái nửa vời khi network fail và khớp với UI (checkbox + drag sort → lưu một lần). **Ngữ nghĩa phần tử vắng mặt (R4): `isActive = false`, hàng VẪN CÒN — trừ `ProductHost`, nơi vắng mặt nghĩa là XOÁ hàng thật.**
 
 **Ruling R2 (P1b):** bỏ luồng signed-upload-url hai bước (`upload-url` → browser PUT thẳng lên bucket → `commit`) khỏi bản `# Assets` ở trên — luồng đó để browser ghi **bytes chưa lọc** thẳng vào bucket public, tức XSS (rủi ro S1, §13.2) nằm giữa lúc ghi và lúc admin/route nào đó lỡ đọc lại trước khi kiểm. Thay bằng một request multipart duy nhất đi qua server: `POST /api/admin/assets` nhận file, sanitize (SVG) hoặc kiểm magic byte (ảnh nhị phân), rồi mới gọi `uploadSanitizedSvg`/`uploadBinaryAsset` (`src/lib/storage/index.ts`) — không có đường nào để bytes chưa lọc chạm bucket. Cái giá phải trả: file đi qua Vercel serverless (giới hạn body ~4.5MB — xem `MAX_ASSET_BYTES`), không phải trực tiếp browser→Supabase; chấp nhận được vì asset (SVG, texture) luôn nhỏ hơn nhiều so với giới hạn đó.
 
-**Ví dụ `validate-svg`:**
+**SVG mockup (`kind=SVG_MOCKUP`) — ba lớp từ chối, mỗi lớp KHÔNG lưu gì nếu trượt (P2a, ship thật):**
+1. **R5** — SVG tham chiếu tài nguyên ngoài (`sanitization.externalRefs.length > 0`) → 422 `external_reference`, kèm `externalRefs`. Texture da hợp lệ chính LÀ URL ngoài ở route khác, nhưng một mockup admin upload thì không có lý do hợp lệ nào để trỏ ra ngoài — bị từ chối thẳng, không tự động gỡ.
+2. **R6** — SVG nhúng tài nguyên `data:` URI (`findEmbeddedResourceRefs`) → 422 `embedded_resource`, kèm `embeddedRefs`. Policy sanitize CHUNG giữ `data:image/*` (kể cả `svg+xml`) vì SVG-as-image bị trình duyệt sandbox — nhưng endpoint mockup riêng này từ chối thêm, vì mockup master thật có 0 `data:` URI (artwork `<image>` không có `href` kiểu đó) và "có lẽ vô hại" không đủ ở ranh giới stored-XSS.
+3. Không thoả hợp đồng customizer (`validateSvgContract`, đo **SAU** sanitize — đúng cái sẽ được lưu) → 422 `svg_contract`, kèm `validation` (`ValidationReport`) trong body.
+
+Chỉ khi qua cả ba lớp, server mới gọi `uploadSanitizedSvg` và ghi `Asset` row (ruling R2).
+
+**Ví dụ `validate-svg`** — dùng đúng tên trường của `SanitizeReport` thật (`src/svg-engine/sanitize.ts`): `removedElements` / `removedAttributes` / `externalRefs`, KHÔNG PHẢI `removedScripts` / `removedEventHandlers`:
 
 ```jsonc
 {
   "valid": false,
-  "contractVersion": "animal-v1",
-  "viewBox": "0 0 1427 1102",
-  "checks": [
-    { "id": "wallet-preview",    "status": "ok" },
-    { "id": "wallet-body-shape", "status": "ok" },
-    { "id": "body-artwork",      "status": "ok", "element": "image" },
-    { "id": "animal-shape",      "status": "missing",
-      "hint": "Found 'fish-shape'. File not migrated to the animal-* contract." },
-    { "id": "animal-clip",       "status": "missing", "hint": "Found 'fish-clip'." },
-    { "id": "animal-artwork",    "status": "missing", "hint": "Found 'fish-artwork'." },
-    { "id": "stitches",          "status": "warning",
-      "hint": "Group exists but fill does not use var(--wallet-stitches)." }
-  ],
-  "sanitization": { "removedScripts": 0, "removedEventHandlers": 0, "externalRefs": [] }
+  "validation": {
+    "valid": false,
+    "contractVersion": "animal-v1",
+    "viewBox": "0 0 1427 1102",
+    "checks": [
+      { "id": "wallet-preview",    "status": "ok" },
+      { "id": "wallet-body-shape", "status": "ok" },
+      { "id": "body-artwork",      "status": "ok", "element": "image" },
+      { "id": "animal-shape",      "status": "missing",
+        "hint": "Found 'fish-shape'. File not migrated to the animal-* contract." },
+      { "id": "animal-clip",       "status": "missing", "hint": "Found 'fish-clip'." },
+      { "id": "animal-artwork",    "status": "missing", "hint": "Found 'fish-artwork'." },
+      { "id": "stitches",          "status": "warning",
+        "hint": "Group exists but fill does not use var(--wallet-stitches)." }
+    ]
+  },
+  "sanitization": { "removedElements": [], "removedAttributes": [], "externalRefs": [] },
+  "externalRefs": [],
+  "embeddedRefs": []
 }
 ```
 
