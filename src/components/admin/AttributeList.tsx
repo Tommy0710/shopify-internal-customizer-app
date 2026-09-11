@@ -111,8 +111,18 @@ function SortableAttributeRow({ item, index, total, onEdit, onMove, onArchive }:
 }
 
 /** Hàng cho item ĐÃ ARCHIVE — chỉ hiện khi bật "Hiện cả đã lưu trữ", không
- * tham gia kéo-thả (archive không có sortOrder có ý nghĩa để sắp lại). */
-function ArchivedAttributeRow({ item, onEdit }: { item: AttributeDto; onEdit: (item: AttributeDto) => void }) {
+ * tham gia kéo-thả (archive không có sortOrder có ý nghĩa để sắp lại). Nút
+ * "Khôi phục" tách riêng khỏi click-để-sửa (tên) — PATCH `{archived:false}`
+ * qua CÙNG route/hook với sửa thường, không route/hook mới. */
+function ArchivedAttributeRow({
+  item,
+  onEdit,
+  onRestore,
+}: {
+  item: AttributeDto;
+  onEdit: (item: AttributeDto) => void;
+  onRestore: (item: AttributeDto) => void;
+}) {
   return (
     <li data-testid={`attribute-row-${item.id}`}>
       <InlineStack gap="200" blockAlign="center" wrap={false}>
@@ -120,6 +130,9 @@ function ArchivedAttributeRow({ item, onEdit }: { item: AttributeDto; onEdit: (i
           {item.name}
         </Button>
         <Badge tone="critical">Archived</Badge>
+        <Button variant="tertiary" onClick={() => onRestore(item)}>
+          Khôi phục
+        </Button>
       </InlineStack>
     </li>
   );
@@ -136,6 +149,7 @@ export function AttributeList({ kind }: AttributeListProps) {
   const { data, loading, error, refetch } = useAdminQuery<ListResponse>(path);
   const reorderMutation = useAdminMutation<{ orderedIds: string[] }, { ok: boolean }>("POST");
   const archiveMutation = useAdminMutation<undefined, AttributeDto>("DELETE");
+  const restoreMutation = useAdminMutation<{ archived: boolean }, AttributeDto>("PATCH");
 
   // Nạp lại "items" từ response GET mỗi khi nó đổi (fetch đầu, đổi toggle,
   // hoặc refetch() sau 409 STALE_ORDER). Sắp theo sortOrder tường minh ở đây
@@ -222,6 +236,24 @@ export function AttributeList({ kind }: AttributeListProps) {
     });
   }
 
+  // Khôi phục dùng CHUNG route/hook PATCH với sửa thường (`PATCH_SCHEMAS` đã
+  // nhận `archived: boolean` và tự null hoá `archivedAt` khi false — không
+  // route/hook mới). Cùng nguyên tắc "cập nhật từ response mutation, không
+  // refetch" — item chuyển hẳn từ danh sách archived sang active ngay khi
+  // response về, KHÔNG cần đổi toggle hay gọi GET lại.
+  function handleRestore(item: AttributeDto): void {
+    restoreMutation
+      .mutate(`/api/admin/${kind}/${item.id}`, { archived: false })
+      .then((dto) => {
+        setItems((prev) => prev.map((existing) => (existing.id === dto.id ? dto : existing)));
+      })
+      .catch(() => {
+        // Thất bại (vd. 404 nếu item đã bị xoá nơi khác): KHÔNG tự đánh dấu
+        // là đã khôi phục — item giữ nguyên trong danh sách archived,
+        // `restoreMutation.error` đã được hook set, banner chung hiển thị.
+      });
+  }
+
   return (
     <BlockStack gap="400">
       <Card>
@@ -244,6 +276,7 @@ export function AttributeList({ kind }: AttributeListProps) {
           {error && <AdminErrorBanner error={error} />}
           {reorderMutation.error && <AdminErrorBanner error={reorderMutation.error} />}
           {archiveMutation.error && <AdminErrorBanner error={archiveMutation.error} />}
+          {restoreMutation.error && <AdminErrorBanner error={restoreMutation.error} />}
 
           {loading ? (
             <InlineStack gap="200" blockAlign="center">
@@ -279,7 +312,7 @@ export function AttributeList({ kind }: AttributeListProps) {
                   </Text>
                   <ul data-testid="attribute-archived-list">
                     {archivedItems.map((item) => (
-                      <ArchivedAttributeRow key={item.id} item={item} onEdit={openEdit} />
+                      <ArchivedAttributeRow key={item.id} item={item} onEdit={openEdit} onRestore={handleRestore} />
                     ))}
                   </ul>
                 </BlockStack>

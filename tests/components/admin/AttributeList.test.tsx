@@ -162,6 +162,108 @@ describe("AttributeList", () => {
     await waitFor(() => expect(screen.queryByText("To Archive")).not.toBeInTheDocument());
   });
 
+  it.each(ATTRIBUTE_KINDS)(
+    "kind=%s: hàng đã lưu trữ có nút Khôi phục — PATCH archived:false, đưa item về danh sách active, không gọi GET thêm",
+    async (kind) => {
+      stubAppBridge();
+      const archived = makeAttribute(kind, {
+        id: "a",
+        name: "Restore Me",
+        sortOrder: 0,
+        archivedAt: "2026-01-01T00:00:00.000Z",
+      });
+      const restored = { ...archived, archivedAt: null };
+      const fetchMock = mockAdminFetchResponses({
+        [`GET ${ATTRIBUTE_PATH[kind]}`]: { status: 200, body: { items: [] } },
+        [`GET ${ATTRIBUTE_PATH[kind]}?includeArchived=true`]: { status: 200, body: { items: [archived] } },
+        [`PATCH ${ATTRIBUTE_PATH[kind]}/a`]: { status: 200, body: restored },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderWithPolaris(<AttributeList kind={kind} />);
+      await waitFor(() => expect(screen.getByText("Chưa có mục nào.")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText("Hiện cả đã lưu trữ"));
+      await waitFor(() =>
+        expect(within(screen.getByTestId("attribute-archived-list")).getByText("Restore Me")).toBeInTheDocument(),
+      );
+
+      // Đúng LÚC này (hàng đã hiện ra), đếm số GET đã xảy ra — khôi phục
+      // không được thêm bất kỳ GET nào nữa (cùng nguyên tắc "PATCH cập nhật
+      // từ response mutation, không refetch" như test sửa/lưu bên trên).
+      const getCallsBeforeRestore = vi
+        .mocked(fetchMock)
+        .mock.calls.filter(([, init]) => ((init as RequestInit | undefined)?.method ?? "GET") === "GET").length;
+
+      fireEvent.click(screen.getByRole("button", { name: "Khôi phục" }));
+
+      await waitFor(() => {
+        const patchCall = vi
+          .mocked(fetchMock)
+          .mock.calls.find(
+            ([input, init]) =>
+              String(input) === `${ATTRIBUTE_PATH[kind]}/a` && (init as RequestInit | undefined)?.method === "PATCH",
+          );
+        expect(patchCall).toBeDefined();
+      });
+      const patchCall = vi
+        .mocked(fetchMock)
+        .mock.calls.find(
+          ([input, init]) =>
+            String(input) === `${ATTRIBUTE_PATH[kind]}/a` && (init as RequestInit | undefined)?.method === "PATCH",
+        )!;
+      expect(JSON.parse((patchCall[1] as RequestInit).body as string)).toEqual({ archived: false });
+
+      // Item giờ hiện trong danh sách ACTIVE (không cần bấm gì thêm, không
+      // cần GET mới) — không còn nằm trong danh sách archived.
+      await waitFor(() =>
+        expect(within(screen.getByTestId("attribute-active-list")).getByText("Restore Me")).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId("attribute-archived-list")).not.toBeInTheDocument();
+
+      const getCallsAfterRestore = vi
+        .mocked(fetchMock)
+        .mock.calls.filter(([, init]) => ((init as RequestInit | undefined)?.method ?? "GET") === "GET").length;
+      expect(getCallsAfterRestore).toBe(getCallsBeforeRestore);
+    },
+  );
+
+  it.each(ATTRIBUTE_KINDS)(
+    "kind=%s: khôi phục thất bại (404) hiện banner lỗi, KHÔNG tự đánh dấu là đã khôi phục",
+    async (kind) => {
+      stubAppBridge();
+      const archived = makeAttribute(kind, {
+        id: "a",
+        name: "Gone",
+        sortOrder: 0,
+        archivedAt: "2026-01-01T00:00:00.000Z",
+      });
+      vi.stubGlobal(
+        "fetch",
+        mockAdminFetchResponses({
+          [`GET ${ATTRIBUTE_PATH[kind]}`]: { status: 200, body: { items: [] } },
+          [`GET ${ATTRIBUTE_PATH[kind]}?includeArchived=true`]: { status: 200, body: { items: [archived] } },
+          [`PATCH ${ATTRIBUTE_PATH[kind]}/a`]: { status: 404, body: { error: "NOT_FOUND" } },
+        }),
+      );
+
+      renderWithPolaris(<AttributeList kind={kind} />);
+      await waitFor(() => expect(screen.getByText("Chưa có mục nào.")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText("Hiện cả đã lưu trữ"));
+      await waitFor(() =>
+        expect(within(screen.getByTestId("attribute-archived-list")).getByText("Gone")).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Khôi phục" }));
+
+      await waitFor(() => expect(screen.getByText(/NOT_FOUND/)).toBeInTheDocument());
+      // Vẫn còn trong danh sách archived — thất bại không được âm thầm coi
+      // như đã khôi phục.
+      expect(within(screen.getByTestId("attribute-archived-list")).getByText("Gone")).toBeInTheDocument();
+    },
+  );
+
   it.each(ATTRIBUTE_KINDS)("kind=%s: sắp lại thứ tự gửi POST reorder với đầy đủ id đang hiển thị", async (kind) => {
     stubAppBridge();
     const a = makeAttribute(kind, { id: "a", name: "First", sortOrder: 0 });
