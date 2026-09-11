@@ -1,11 +1,21 @@
-import type { AnimalTreeDto, ProductHostDto, ProductSummaryDto, ProductTreeDto, StitchTreeDto, StyleTreeDto } from "@/lib/admin/products";
+import type {
+  AnimalTreeDto,
+  PriceCellDto,
+  PriceCellVariantDto,
+  ProductHostDto,
+  ProductSummaryDto,
+  ProductTreeDto,
+  StitchTreeDto,
+  StyleTreeDto,
+} from "@/lib/admin/products";
 import type { ReadinessProblem } from "@/lib/admin/readiness";
 import type { AttributeDto } from "@/lib/admin/attributes";
 
 /**
- * Fixture dùng chung cho mọi test tab Products (Task 4) —
+ * Fixture dùng chung cho mọi test tab Products (Task 4-5) —
  * `ProductsTab.test.tsx`, `HostsSection.test.tsx`, `RelationChecklist.test.tsx`,
- * `ReadinessBanner.test.tsx` — cùng tiền lệ `attributeFixtures.ts` của Task 3.
+ * `ReadinessBanner.test.tsx`, `PriceMatrixSection.test.tsx` — cùng tiền lệ
+ * `attributeFixtures.ts` của Task 3.
  */
 
 export function makeProductSummary(overrides: Partial<ProductSummaryDto> = {}): ProductSummaryDto {
@@ -90,7 +100,8 @@ export function makeProductTree(overrides: Partial<ProductTreeDto> = {}): Produc
   };
 }
 
-/** Attribute rời (shop-wide), dùng làm nguồn checklist của `RelationChecklist`. */
+/** Attribute rời (shop-wide), dùng làm nguồn checklist của `RelationChecklist`
+ * và nguồn hàng của `PriceMatrixSection` (leathers). */
 export function makeRelationAttribute(overrides: Partial<AttributeDto> = {}): AttributeDto {
   return {
     id: overrides.id ?? "attr-1",
@@ -100,5 +111,29 @@ export function makeRelationAttribute(overrides: Partial<AttributeDto> = {}): At
     sortOrder: overrides.sortOrder ?? 0,
     archivedAt: overrides.archivedAt ?? null,
     displayImage: overrides.displayImage !== undefined ? overrides.displayImage : null,
+  };
+}
+
+/** Cột trạng thái variant trong một ô giá — `PriceMatrixSection`, Task 5. */
+export function makePriceCellVariant(overrides: Partial<PriceCellVariantDto> = {}): PriceCellVariantDto {
+  return {
+    shopifyProductId: overrides.shopifyProductId ?? "999",
+    shopifyVariantId: overrides.shopifyVariantId ?? "44920001",
+    priceSnapshot: overrides.priceSnapshot !== undefined ? overrides.priceSnapshot : null,
+    missing: overrides.missing ?? false,
+    syncedAt: overrides.syncedAt !== undefined ? overrides.syncedAt : null,
+  };
+}
+
+/** Một ô của ma trận giá style×leather / animal×leather — `PriceMatrixSection`, Task 5. */
+export function makePriceCell(overrides: Partial<PriceCellDto> = {}): PriceCellDto {
+  return {
+    leatherId: overrides.leatherId ?? "leather-1",
+    name: overrides.name ?? "Suede Brown",
+    price: overrides.price !== undefined ? overrides.price : "80.00",
+    isActive: overrides.isActive ?? true,
+    sortOrder: overrides.sortOrder ?? 0,
+    archived: overrides.archived ?? false,
+    variant: overrides.variant !== undefined ? overrides.variant : null,
   };
 }

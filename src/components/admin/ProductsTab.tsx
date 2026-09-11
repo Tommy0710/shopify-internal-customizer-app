@@ -8,6 +8,7 @@ import { AdminErrorBanner } from "@/components/AdminErrorBanner";
 import { HostsSection } from "./products/HostsSection";
 import { RelationChecklist } from "./products/RelationChecklist";
 import { ReadinessBanner } from "./products/ReadinessBanner";
+import { PriceMatrixSection } from "./products/PriceMatrixSection";
 import type { ProductSummaryDto, ProductTreeDto } from "@/lib/admin/products";
 
 /**
@@ -191,14 +192,9 @@ function ProductDetail({ id, onBack }: ProductDetailProps) {
       <RelationChecklist kind="animals" product={product} onSaved={refetch} />
       <RelationChecklist kind="stitches" product={product} onSaved={refetch} />
 
-      <Card>
-        <BlockStack gap="200">
-          <Text as="h2" variant="headingMd">
-            Ma trận giá (style × leather, animal × leather)
-          </Text>
-          <Text as="p">Sẽ có ở Task 5.</Text>
-        </BlockStack>
-      </Card>
+      <PriceMatrixSection matrix="style" product={product} onSaved={refetch} />
+      <PriceMatrixSection matrix="animal" product={product} onSaved={refetch} />
+
       <Card>
         <BlockStack gap="200">
           <Text as="h2" variant="headingMd">

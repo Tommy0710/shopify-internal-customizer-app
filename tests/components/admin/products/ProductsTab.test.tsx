@@ -86,6 +86,7 @@ describe("ProductsTab — detail", () => {
       mockAdminFetchResponses({
         "GET /api/admin/products": { status: 200, body: { items: [makeProductSummary({ id: "p1", name: "Detail Wallet" })] } },
         "GET /api/admin/products/p1": { status: 200, body: tree },
+        "GET /api/admin/leathers": { status: 200, body: { items: [] } },
       }),
     );
 
@@ -106,6 +107,7 @@ describe("ProductsTab — detail", () => {
       mockAdminFetchResponses({
         "GET /api/admin/products": { status: 200, body: { items: [makeProductSummary({ id: "p1", name: "Detail Wallet" })] } },
         "GET /api/admin/products/p1": { status: 200, body: tree },
+        "GET /api/admin/leathers": { status: 200, body: { items: [] } },
       }),
     );
 
@@ -120,7 +122,7 @@ describe("ProductsTab — detail", () => {
     expect(window.location.search).not.toContain("product=");
   });
 
-  it("ma trận giá và lưới SVG hiển thị dạng placeholder (Task 5/6)", async () => {
+  it("ma trận giá (Task 5) render hai section thật; lưới SVG vẫn placeholder (Task 6)", async () => {
     stubAppBridge();
     const tree = makeProductTree({ id: "p1", name: "Detail Wallet" });
     vi.stubGlobal(
@@ -128,6 +130,7 @@ describe("ProductsTab — detail", () => {
       mockAdminFetchResponses({
         "GET /api/admin/products": { status: 200, body: { items: [] } },
         "GET /api/admin/products/p1": { status: 200, body: tree },
+        "GET /api/admin/leathers": { status: 200, body: { items: [] } },
       }),
     );
 
@@ -135,7 +138,8 @@ describe("ProductsTab — detail", () => {
     renderWithPolaris(<ProductsTab />);
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Detail Wallet" })).toBeInTheDocument());
-    expect(screen.getByText("Sẽ có ở Task 5.")).toBeInTheDocument();
+    expect(screen.getByText("Styles & body pricing")).toBeInTheDocument();
+    expect(screen.getByText("Animals & applique pricing")).toBeInTheDocument();
     expect(screen.getByText("Sẽ có ở Task 6.")).toBeInTheDocument();
   });
 });
