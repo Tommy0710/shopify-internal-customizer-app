@@ -28,8 +28,31 @@ interface SelectedCell {
   animal: AnimalTreeDto;
 }
 
-function findCell(style: StyleTreeDto, animalId: string): StyleAnimalCellDto | null {
+/** Dùng cho LƯỚI (✓/⚠) — chỉ ô đang active mới tính là "đã có mockup". Một ô
+ * đã từng lưu rồi bị tắt (isActive:false, không phải archived) vẫn hiện
+ * ⚠ missing ở đây, đúng quy ước "isActive:false = chưa offer" xuyên suốt phase
+ * này (giống PriceMatrixSection/RelationChecklist). */
+function findActiveCell(style: StyleTreeDto, animalId: string): StyleAnimalCellDto | null {
   return style.animals.find((c) => c.animalId === animalId && c.isActive) ?? null;
+}
+
+/**
+ * Dùng để PREFILL DRAWER — theo `(styleId, animalId)`, KHÔNG lọc `isActive`.
+ *
+ * Bug đã sửa (fix round 1): trước đây drawer prefill cũng gọi hàm lọc
+ * `isActive`, nên một ô đã từng lưu (còn nguyên `displayLabel`/`description`/
+ * `defaultStitchId`/`svgAssetId` thật trong DB) nhưng đang `isActive:false` —
+ * khác `archived` — mở drawer HOÀN TOÀN RỖNG, giống hệt một cặp chưa từng
+ * lưu. Hậu quả thật: admin mất quyền nhìn lại nhãn/mô tả/stitch mặc định cũ,
+ * bị buộc tải lại SVG chỉ để bỏ chặn nút Lưu, và nếu quên gõ lại các trường
+ * cũ thì lần lưu đó ÂM THẦM xoá chúng (whole-list PUT gửi cell mới thay cell
+ * cũ). Việc lưới hiện ⚠ missing cho ô này là ĐÚNG (xem `findActiveCell`) —
+ * chỉ nguồn prefill của drawer là sai, sửa đúng một chỗ đó. Checkbox "Đang
+ * hoạt động" trong drawer (khởi tạo từ `cell.isActive`) vẫn là nơi DUY NHẤT
+ * quyết định bật lại ô này khi lưu — hàm này không đổi ngữ nghĩa đó.
+ */
+function findAnyCell(style: StyleTreeDto, animalId: string): StyleAnimalCellDto | null {
+  return style.animals.find((c) => c.animalId === animalId) ?? null;
 }
 
 export function SvgGridSection({ product, onSaved }: SvgGridSectionProps) {
@@ -87,7 +110,7 @@ export function SvgGridSection({ product, onSaved }: SvgGridSectionProps) {
                       </InlineStack>
                     </th>
                     {animals.map((animal) => {
-                      const cell = findCell(style, animal.animalId);
+                      const cell = findActiveCell(style, animal.animalId);
                       const stateLabel = cell ? "✓ SVG" : "⚠ missing";
                       const button = (
                         <Button
@@ -129,7 +152,7 @@ export function SvgGridSection({ product, onSaved }: SvgGridSectionProps) {
           productId={product.id}
           style={selected.style}
           animal={selected.animal}
-          cell={findCell(selected.style, selected.animal.animalId)}
+          cell={findAnyCell(selected.style, selected.animal.animalId)}
           stitches={product.stitches}
           open
           onClose={closeDrawer}
