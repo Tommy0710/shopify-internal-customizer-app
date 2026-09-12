@@ -1,10 +1,12 @@
 # 🛍️ Wild & King Customizer — Shopify Internal Custom Product App
 
-App **nội bộ (Custom Distribution)** cho phép khách hàng tùy biến sản phẩm da thủ công (dây đồng hồ, ví, money clip…) ngay trên trang sản phẩm Shopify, đồng thời cung cấp bảng quản trị nhúng trong Shopify Admin để cấu hình option và theo dõi hàng chờ sản xuất.
+App **nội bộ (Custom Distribution)** cho phép khách hàng tùy biến sản phẩm da thủ công (dây đồng hồ, ví, money clip…) ngay trên trang sản phẩm Shopify, đồng thời cung cấp bảng quản trị nhúng trong Shopify Admin để cấu hình attribute, ma trận giá, và theo dõi hàng chờ sản xuất.
 
 Kiến trúc theo chuẩn **Shopify Online Store 2.0**: `Theme App Extension` (widget chạy trực tiếp trong DOM storefront, **không dùng iframe**) + `App Proxy` (gọi API cùng domain, ký HMAC) + `Embedded Next.js Admin` (nhúng trong Shopify Admin qua App Bridge).
 
 > **Đọc file này trước khi làm bất cứ việc gì.** Phần [Bạn cần làm gì tiếp theo](#-bạn-cần-làm-gì-tiếp-theo) ở cuối liệt kê các việc còn dang dở.
+>
+> **Trạng thái hiện tại (sau P2c):** schema Postgres (18 model), Supabase Storage, hợp đồng zod dùng chung storefront/admin (P1b), admin API cấu hình (attribute CRUD, asset upload, product config, ma trận giá, readiness — P2a), và admin UI hai tab Attributes/Products (P2c, spec §12) đã xong — chạy tại `src/app/page.tsx`, verify thật trong Shopify Admin chưa làm (xem `docs/runbooks/admin-ui-manual-check.md`). **Còn thiếu:** sinh biến thể Shopify (nút "Generate variants" có trên UI nhưng disabled — P2b), route storefront `/apps/customizer/*` (P3), và production queue (P4). Đừng tin theo trí nhớ về "luồng end-to-end" của bản thiết kế cũ (dùng `ProductConfig`/`OptionGroup`/`Design`…) — schema đó đã bị xoá. Nguồn sự thật cho thiết kế mới là `docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md`.
 
 ---
 
@@ -21,8 +23,9 @@ Kiến trúc theo chuẩn **Shopify Online Store 2.0**: `Theme App Extension` (w
 | Database | Supabase PostgreSQL 17.6 — project ref `jdobnvvorpkoqkpxcdhw` |
 | Dev store | `wildandking-demo.myshopify.com` |
 | Theme extension UID | `0a224368-cac3-af26-7d8e-302063d9d999e58322af` |
-| Webhook API version | `2026-10` |
-| App Proxy | `https://<shop>/apps/customizer/*` → `https://wild-king-customizer.vercel.app/api/proxy/*` |
+| Shopify API version | `2026-07` — một hằng số duy nhất, xem [`src/lib/shopify/apiVersion.ts`](src/lib/shopify/apiVersion.ts) |
+| App Proxy | `https://<shop>/apps/customizer/*` → `https://wild-king-customizer.vercel.app/api/proxy/*` (khai báo trong `shopify.app.toml`; route con dưới `/api/proxy/*` **chưa được viết lại** — P3) |
+| Supabase Storage bucket | `wk-assets` (public read) — xem `docs/runbooks/supabase-storage.md` |
 
 **Deploy tự động:** push lên nhánh `main` của GitHub → Vercel tự build & deploy. Theme extension **KHÔNG** tự deploy, phải chạy `npm run shopify:deploy` thủ công.
 
@@ -34,8 +37,10 @@ Kiến trúc theo chuẩn **Shopify Online Store 2.0**: `Theme App Extension` (w
 |---|---|
 | Backend / Admin | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | ORM / DB | Prisma 5 + Supabase PostgreSQL (pooled + direct URL) |
+| File storage | Supabase Storage (`@supabase/supabase-js`) — SVG mockup, texture, display image, baked design SVG |
+| Validation / hợp đồng dùng chung | Zod (`src/shared/`) — cùng một schema chạy ở server lẫn ở bundle storefront |
 | Storefront widget | React 18 source → bundle bằng esbuild, alias sang **Preact/compat** (giảm ~130KB → ~8KB) |
-| Shopify | `@shopify/shopify-api` v11, Shopify CLI v3, Theme App Extension |
+| Shopify | `@shopify/shopify-api` v14, Shopify CLI v3, Theme App Extension |
 | Hosting | Vercel (serverless) |
 | Icon / UI | lucide-react, clsx, tailwind-merge |
 
@@ -44,29 +49,19 @@ Kiến trúc theo chuẩn **Shopify Online Store 2.0**: `Theme App Extension` (w
 ## 🏗️ Cấu trúc thư mục
 
 ```
-App noi bo/
+shopify-internal-customizer-app/
 ├── extensions/
 │   └── product-customizer-block/          # 🎨 THEME APP EXTENSION (chạy trên storefront)
 │       ├── blocks/customizer.liquid       # App Block: mount point <div id="product-customizer-root">
 │       │                                  #   truyền product.id, variant.id, shop domain qua data-*
-│       │                                  #   có {% schema %} cho merchant chỉnh title/màu/text nút
 │       ├── assets/
 │       │   ├── customizer-bundle.js       # ⚠️ FILE BUILD — sinh ra bởi npm run bundle:extension
-│       │   └── customizer.css             # CSS thủ công cho widget
+│       │   └── customizer.css
 │       ├── locales/en.default.json
 │       └── shopify.extension.toml         # type = "theme", uid cố định (KHÔNG đổi)
 │
-├── packages/
-│   └── shared-types/src/                  # 📦 Types dùng chung storefront ↔ admin ↔ API
-│       ├── config.ts                      # ProductConfig, OptionGroup, OptionValue
-│       ├── design.ts                      # Design, DesignSelection, ProductionJob
-│       ├── api.ts                         # Request/Response shapes
-│       └── index.ts
-│
 ├── prisma/
-│   ├── schema.prisma                      # 9 model (xem mục Database bên dưới)
-│   ├── seed.mjs                           # Dữ liệu mẫu: shop demo + config dây đồng hồ bespoke
-│   └── dev.db                             # (legacy SQLite, KHÔNG dùng nữa — đã chuyển Postgres)
+│   └── schema.prisma                      # 18 model — xem mục Database bên dưới. Không còn seed.mjs.
 │
 ├── scripts/
 │   └── bundle-extension.mjs               # esbuild: src/storefront-customizer → assets/customizer-bundle.js
@@ -74,48 +69,60 @@ App noi bo/
 │
 ├── src/
 │   ├── app/                               # Next.js App Router
-│   │   ├── page.tsx                       # ⭐ TRANG CHÍNH — Embedded Admin (Shopify nhúng URL này)
-│   │   │                                  #   3 tab bằng useState: Dashboard | Product Configs | Production Queue
+│   │   ├── page.tsx                       # Shell chờ P2 — KHÔNG PHẢI admin thật. Cây route
+│   │   │                                  #   `/admin/*` cũ đã bị xoá ở P1b (chạy trên schema cũ).
 │   │   ├── layout.tsx                     # Root layout + nhúng script App Bridge
 │   │   ├── globals.css
 │   │   ├── storefront-preview/page.tsx    # Trang xem trước widget ngoài Shopify (dev/QA)
-│   │   ├── admin/
-│   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx                   # ⚠️ LEGACY — trùng chức năng với src/app/page.tsx, chưa dùng
-│   │   │   ├── products/page.tsx          # UI cấu hình option/giá (được page.tsx import làm tab)
-│   │   │   └── orders/page.tsx            # UI hàng chờ sản xuất (được page.tsx import làm tab)
 │   │   └── api/
 │   │       ├── auth/route.ts              # Bước 1 OAuth: redirect sang /admin/oauth/authorize
 │   │       ├── auth/callback/route.ts     # Bước 2 OAuth: verify HMAC → đổi code lấy token → lưu bảng Shop
-│   │       ├── proxy/
-│   │       │   ├── customizer-config/     # GET  — storefront lấy cấu hình option của product
-│   │       │   └── save-design/           # POST — lưu thiết kế nháp (DRAFT)
-│   │       ├── cart/validate/route.ts     # POST — ⭐ TÍNH GIÁ PHÍA SERVER + tạo Design + trả line item properties
-│   │       ├── admin/
-│   │       │   ├── products/route.ts      # GET danh sách config | POST upsert config
-│   │       │   └── orders/route.ts        # GET jobs + draftDesigns | PATCH đổi status job
+│   │       ├── admin/                     # ⚠️ TỒN TẠI NHƯNG RỖNG — không có route.ts nào.
+│   │       │                              #   P2 lấp vào; MỌI handler bắt buộc viết bằng
+│   │       │                              #   `withAdminSession` (xem CLAUDE.md).
 │   │       └── webhooks/
-│   │           ├── orders-create/         # Đọc property _custom_design_id → Design=ORDERED + tạo ProductionJob
+│   │           ├── orders-create/         # Đọc property design id từ line item → tạo OrderLineDesign
 │   │           └── app-uninstalled/       # Đánh dấu shop gỡ cài đặt
 │   │
 │   ├── lib/
 │   │   ├── db.ts                          # Prisma singleton (tránh tạo nhiều connection khi hot-reload)
+│   │   ├── ids.ts                         # Sinh id (node:crypto, KHÔNG dùng nanoid — ruling R4)
 │   │   ├── hmac.ts                        # verifyShopifyProxySignature + verifyShopifyWebhook (timingSafeEqual)
-│   │   ├── shopify.ts                     # Khởi tạo shopifyApi + helper executeShopifyGraphQL
-│   │   └── pricing/pricingEngine.ts       # ⭐ calculateServerPrice — nguồn giá DUY NHẤT đáng tin
+│   │   ├── svg/parseSvgNode.ts            # Parse SVG text → DOM node (linkedom)
+│   │   ├── storage/index.ts               # ⭐ ĐƯỜNG GHI ASSET DUY NHẤT — Supabase Storage. Chỉ nhận
+│   │   │                                  #   SVG đã sanitize (xem CLAUDE.md); tự verify lần hai.
+│   │   ├── auth/
+│   │   │   ├── sessionToken.ts            # Verify App Bridge session token (HS256)
+│   │   │   ├── shopDomain.ts              # Chuẩn hoá/so sánh shop domain
+│   │   │   ├── requireAdminSession.ts     # Trả { session } | { response } — KHÔNG throw
+│   │   │   └── withAdminSession.ts        # ⭐ Cách DUY NHẤT viết route `/api/admin/*` — bắt buộc
+│   │   └── shopify/
+│   │       ├── apiVersion.ts              # ⭐ NGUỒN SỰ THẬT DUY NHẤT cho Shopify API version
+│   │       └── client.ts                  # Khởi tạo shopifyApi dùng SHOPIFY_API_VERSION ở trên
+│   │
+│   ├── shared/                            # Zod contracts DÙNG CHUNG server ↔ bundle storefront.
+│   │   │                                  #   Phải là code thuần — không @supabase/supabase-js,
+│   │   │                                  #   không process.env, không Node builtin.
+│   │   │                                  #   Hàng rào: tests/shared/purity.test.ts
+│   │   ├── ids.ts                         # Schema id design/share-token
+│   │   ├── designRequest.ts               # Payload tạo design
+│   │   ├── lineItemProperties.ts          # Property gắn vào Cart AJAX API
+│   │   └── customizerConfig.ts            # Shape config trả về cho storefront
+│   │
+│   ├── svg-engine/                        # Sanitizer + renderer SVG (từ P1a) — 252+ test riêng
 │   │
 │   └── storefront-customizer/
-│       ├── index.tsx                      # Entry: mount React vào #product-customizer-root,
-│       │                                  #   lắng nghe shopify:section:load để re-mount trong Theme Editor
-│       └── CustomizerApp.tsx              # Toàn bộ UI chọn da / khóa / size / khắc laser + add to cart
+│       ├── index.tsx                      # Entry: mount React vào #product-customizer-root
+│       └── CustomizerApp.tsx              # UI widget — xem cảnh báo "lệch thiết kế" bên dưới
 │
 ├── web/                                   # Shim cho Shopify CLI (type=backend, port 3000)
-│   ├── shopify.web.toml                   #   dev = "npm --prefix .. run dev:app"
-│   └── package.json
-│
-├── supabase/.temp/                        # Cache CLI của Supabase (đã gitignore)
-├── shopify.app.toml                       # ⭐ Cấu hình app: URL, scopes, webhooks, app_proxy
-├── next.config.mjs                        # CSP frame-ancestors cho /admin/*, CORS cho /api/proxy/*
+├── docs/
+│   ├── runbooks/
+│   │   ├── credential-rotation.md         # Rotate secret khi rời dự án / lộ secret
+│   │   └── supabase-storage.md            # Tạo bucket Storage, CORS, biến môi trường, áp schema lần đầu
+│   └── superpowers/specs/2026-09-08-wk-customizer-redesign-design.md   # ⭐ Spec thiết kế P1–P5
+├── shopify.app.toml                       # Cấu hình app: URL, scopes, webhooks, app_proxy
+├── next.config.mjs                        # CSP frame-ancestors cho `/` và `/admin/*`, CORS cho `/api/proxy/*`
 ├── tailwind.config.ts / postcss.config.mjs / tsconfig.json
 └── .env.example                           # Mẫu biến môi trường
 ```
@@ -124,6 +131,7 @@ App noi bo/
 - **Không sửa tay** `extensions/product-customizer-block/assets/customizer-bundle.js` — file này bị ghi đè mỗi lần build. Sửa ở `src/storefront-customizer/`.
 - `CustomizerApp.tsx` dùng import `react` thật (vì trang `storefront-preview` trong Next.js cần React runtime). Việc đổi sang Preact chỉ xảy ra ở **tầng bundler** (`scripts/bundle-extension.mjs`). **Đừng đổi import trong source** — đã từng gây lỗi type incompatibility.
 - `uid` trong `shopify.extension.toml` là định danh extension trên Shopify. Đổi = tạo extension mới, mất liên kết theme cũ.
+- `src/shared/` phải giữ thuần — nó chạy trong cả bundle Preact của storefront.
 
 ---
 
@@ -131,44 +139,41 @@ App noi bo/
 
 Supabase PostgreSQL, quản lý qua Prisma. Dùng **2 connection string**:
 - `DATABASE_URL` — pooled (port `6543`, `?pgbouncer=true&connection_limit=1`) cho runtime serverless.
-- `DIRECT_URL` — direct (port `5432`) cho `prisma migrate` / `db push`.
+- `DIRECT_URL` — direct (port `5432`) cho `prisma db push` / `migrate`.
 
-### Sơ đồ quan hệ
+18 model, xem đầy đủ ở `prisma/schema.prisma`. Tóm tắt theo nhóm:
 
-```
-Shop (1 bản ghi / 1 store — lưu accessToken OAuth)
-
-ProductConfig ──┬─< OptionGroup ──< OptionValue
-                ├─< CompatibilityRule      (nếu chọn A thì cấm B)
-                ├─< PriceRule              (tổ hợp option → phụ thu)
-                └─< Design ──┬─< DesignSelection
-                             └─1 ProductionJob
-```
-
-### Các model
-
-| Model | Vai trò | Trường then chốt |
+| Nhóm | Model | Vai trò |
 |---|---|---|
-| `Shop` | Lưu token OAuth của store | `shop` (unique), `accessToken`, `scope`, `installed` |
-| `ProductConfig` | Gắn 1 sản phẩm Shopify với bộ tùy chỉnh | `shopifyProductId` (unique), `basePrice`, `isEnabled` |
-| `OptionGroup` | Nhóm lựa chọn | `type`: `LEATHER` / `BUCKLE` / `SIZE` / `STITCH` / `ENGRAVING` / `CUSTOM`, `required`, `sortOrder` |
-| `OptionValue` | Từng lựa chọn | `code`, `colorHex`, `extraPrice`, `inStock`, `sortOrder` |
-| `CompatibilityRule` | Ràng buộc loại trừ | `ifOptionValueId` → `thenDisallowOptionValueIds` (JSON array dạng String) |
-| `PriceRule` | Phụ thu theo tổ hợp | `conditionOptionValueIds` (JSON array dạng String), `additionalPrice` |
-| `Design` | Một thiết kế của khách | `id` = `dsg_xxxxxxxx`, `status`: `DRAFT`→`ORDERED`→`IN_PRODUCTION`→`QC`→`SHIPPED` |
-| `DesignSelection` | Snapshot lựa chọn (tên đã "đóng băng") | `groupName`, `valueName`, `extraPrice` |
-| `ProductionJob` | Lệnh sản xuất sinh từ đơn hàng | `designId` (unique 1-1), `shopifyOrderNumber`, `status`: `NEW`/`IN_PRODUCTION`/`QC`/`SHIPPED` |
+| Shop | `Shop` | 1 bản ghi / 1 store — lưu `accessToken` OAuth |
+| Thư viện file | `Asset` | Mọi SVG mockup, texture, display image, baked SVG — dedupe theo checksum |
+| Attribute (phẳng) | `Leather`, `Stitch`, `Animal`, `Style` | Một danh sách `Leather` dùng chung cho cả body và animal |
+| Product | `CustomizableProduct`, `ProductHost` | 1 customizer có thể gắn nhiều trang sản phẩm Shopify (`ProductHost`) |
+| Ma trận A — style × body leather (CÓ GIÁ) | `ProductStyle`, `ProductStyleLeather` | `ProductStyleLeather` giữ cả `priceInput` (giá admin gõ, chưa chắc sync) lẫn `variantPriceSnapshot` (đọc ngược từ Shopify, chỉ admin xem) |
+| Ma trận B — animal × animal leather (CÓ GIÁ, độc lập style) | `ProductAnimal`, `AnimalLeather` | Cùng cấu trúc hai giá như trên |
+| SVG theo style × animal | `ProductStyleAnimal` | Đúng một SVG cho một tổ hợp (`@@unique([productStyleId, animalId])`) |
+| Stitch khả dụng theo product | `ProductStitch` | — |
+| Design (bất biến) | `CustomDesign`, `CustomDesignSelection` | **Không mang FK nào, kể cả `shopId`** (ruling R5) — archive/xoá attribute không bao giờ phá đơn cũ; `snapshot Json` là nguồn sự thật cho sản xuất |
+| Đơn hàng + sản xuất | `OrderLineDesign` | Nối `CustomDesign` với line item Shopify thật; `productionStatus`: `NEW → IN_PRODUCTION → QC → SHIPPED` (+ `ON_HOLD`) |
+| Idempotency webhook | `WebhookEvent` | Chống Shopify retry xử lý lại |
 
-> ⚠️ `CompatibilityRule.thenDisallowOptionValueIds` và `PriceRule.conditionOptionValueIds` là **String chứa JSON**, không phải array Postgres — phải `JSON.parse()` khi đọc.
+> ⚠️ **Bẫy Prisma `Decimal`:** các cột `Decimal` (`priceInput`, `variantPriceSnapshot`, `quotedTotal`…) trả về object `Decimal.js`, **không phải `number`**. `a + b` trên hai `Decimal` là **nối chuỗi im lặng**, không phải cộng. Dùng `.plus()`/`.minus()`/`.toNumber()`. Chỗ đầu tiên việc này chạm tiền thật: đối soát đơn hàng (`OrderLineDesign.totalMatchesQuote`).
+
+> ⚠️ **Ràng buộc quan trọng khác** (đầy đủ ở spec §7.2): `Asset(shopId, kind, checksumSha256)` unique chống upload trùng; `ProductStyleLeather(shopifyVariantId)` và `AnimalLeather(shopifyVariantId)` unique chống hai cặp cùng trỏ một variant; `CustomDesign(shopId, idempotencyKey)` chống double-click tạo hai design; `OrderLineDesign(shopifyOrderId, shopifyLineItemId)` chống webhook `orders/create` + `orders/paid` nhân đôi.
+
+> ⚠️ **Soft delete:** `isActive = false` (tạm ẩn khỏi storefront) và `archivedAt != null` (nghỉ hẳn, ẩn khỏi admin list) là **hai khái niệm khác nhau**. Attribute không bao giờ hard-delete.
 
 ### Lệnh làm việc với DB
 
 ```bash
 npm run prisma:generate     # sinh Prisma Client sau khi sửa schema
 npm run prisma:push         # đẩy schema lên Supabase (dev — không tạo file migration)
-npm run prisma:seed         # nạp dữ liệu mẫu (shop demo + config dây đồng hồ)
 npx prisma studio           # GUI xem/sửa dữ liệu tại localhost:5555
 ```
+
+Lần đầu áp schema P1b lên DB đang có schema cũ, `npm run prisma:push` **sẽ không chạy được**: bảng `Shop` có một hàng và cột bắt buộc mới `shopDomain` không có default, nên Prisma chỉ còn đường **reset toàn bộ database** (`npx prisma db push --force-reset`) — xoá sạch mọi bảng, mất `accessToken`, phải cài lại app. Chấp nhận được chỉ vì dữ liệu hiện tại là seed demo. Quy trình đầy đủ, đúng thứ tự: **`docs/runbooks/supabase-storage.md`, mục "Áp schema lần đầu"**.
+
+Không còn `prisma/seed.mjs` — dữ liệu attribute/product nhập qua admin UI (P2) hoặc Prisma Studio thủ công.
 
 Với production nên chuyển sang migration có version:
 ```bash
@@ -180,65 +185,38 @@ npx prisma migrate deploy                       # áp dụng lên production
 
 ## ⚙️ Biến môi trường
 
-Copy `.env.example` → `.env` rồi điền. **Tuyệt đối không commit `.env`** (đã có trong `.gitignore`).
+Copy `.env.example` → `.env` rồi điền. **Tuyệt đối không commit `.env`** (đã có trong `.gitignore`). `tests/env.test.ts` quét `src/` để đối chiếu — biến nào bị đọc mà không khai trong `.env.example` sẽ làm `npm test` đỏ.
 
 | Biến | Ý nghĩa | Lấy ở đâu |
 |---|---|---|
 | `SHOPIFY_API_KEY` | Client ID của app | Partners Dashboard → App → API credentials |
-| `SHOPIFY_API_SECRET` | Client Secret — dùng verify HMAC proxy & webhook | như trên |
+| `SHOPIFY_API_SECRET` | Client Secret — dùng verify HMAC proxy & webhook, verify session token admin | như trên |
 | `SHOPIFY_APP_URL` | URL public của app (dev: tunnel; prod: domain Vercel) | Shopify CLI in ra khi `dev`, hoặc Vercel |
 | `SCOPES` | `read_products,write_products,read_orders,write_orders,read_themes,write_themes` | phải khớp `shopify.app.toml` |
 | `DATABASE_URL` | Supabase pooled connection (port 6543) | Supabase → Project Settings → Database → Connection pooling |
 | `DIRECT_URL` | Supabase direct connection (port 5432) | như trên, mục Direct connection |
 | `NODE_ENV` | `development` / `production` | — |
+| `WK_ALLOWED_SHOPS` | **Bắt buộc.** Danh sách shop được vào embedded admin, ngăn cách bằng dấu phẩy. Để trống = chặn tất cả (mọi request `/api/admin/*` trả 403). Không bao giờ dùng `*`. | Domain `.myshopify.com` của shop — production hiện tại là `wildandking-demo.myshopify.com` |
+| `WK_SKIP_HMAC` | Chỉ dùng khi dev cục bộ. Đặt `1` để bỏ qua xác thực HMAC của App Proxy / webhook / OAuth callback. **Tuyệt đối không đặt trên Vercel** — app sẽ ném lỗi nếu bật cùng `NODE_ENV=production`. | Tự đặt trong `.env` cục bộ; mặc định để trống |
+| `SUPABASE_URL` | URL project Supabase, dùng cho Storage (asset SVG/ảnh) | Supabase → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Key toàn quyền, bỏ qua RLS — CHỈ đặt phía server | như trên, mục Project API keys → `service_role` |
+| `SUPABASE_STORAGE_BUCKET` | Tên bucket Storage — `wk-assets` | Tự đặt khi tạo bucket, xem `docs/runbooks/supabase-storage.md` |
 
-**Trên Vercel:** khai báo cùng bộ biến này ở Settings → Environment Variables (scope `Production`). Sau khi đổi biến phải **Redeploy** thì mới có hiệu lực.
+**Trên Vercel:** khai báo cùng bộ biến này ở Settings → Environment Variables (scope `Production`) — **trừ `WK_SKIP_HMAC`, biến này không bao giờ được khai trên Vercel**. `WK_ALLOWED_SHOPS` thì **bắt buộc phải có**: thiếu nó, embedded admin trả 403 cho mọi request. Sau khi đổi biến phải **Redeploy** thì mới có hiệu lực.
 
-> 🔐 Ở `NODE_ENV=development`, các route proxy/webhook **bỏ qua kiểm tra HMAC** để dễ test. Ở production HMAC bắt buộc. Không bao giờ chạy production với `NODE_ENV=development`.
+> 🔐 **Xác thực HMAC luôn bật ở mọi môi trường.** Cách duy nhất để tắt là đặt tường minh `WK_SKIP_HMAC=1` trong `.env` cục bộ, và app sẽ **ném lỗi, từ chối phục vụ request** nếu biến này bật cùng `NODE_ENV=production`.
 
-### 🔑 File `.env` thực tế đang dùng (bản local dev)
+### 🔑 Lấy giá trị `.env` ở đâu
 
-> ### ⛔ CẢNH BÁO — ĐỌC TRƯỚC KHI LÀM BẤT CỨ ĐIỀU GÌ VỚI KHỐI DƯỚI
->
-> Khối này chứa **credential production thật**. Repo `shopify-internal-customizer-app` đã được đặt **PRIVATE** riêng vì lý do này.
->
-> - **KHÔNG** đổi repo sang public khi khối này còn ở đây. Xóa đi vẫn còn trong git history — phải rotate credential.
-> - **KHÔNG** copy nội dung này lên Slack / Lark / issue / screenshot.
-> - Chỉ chia sẻ quyền truy cập repo cho người thực sự cần.
-> - Khi có người rời dự án: rotate `SHOPIFY_API_SECRET` (Partners Dashboard) và đổi mật khẩu DB (Supabase → Settings → Database → Reset password).
->
-> Khi không cần nữa, xóa nguyên mục "🔑 File `.env` thực tế đang dùng" này đi — phần bảng biến môi trường phía trên đã đủ để setup.
+Giá trị thật **không** được ghi trong repo. Lấy từ:
 
-Tạo file `.env` ở thư mục gốc dự án với nội dung sau:
+- `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` — Shopify Partners → App → API credentials
+- `DATABASE_URL`, `DIRECT_URL` — Supabase → Project Settings → Database
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` — Supabase → Project Settings → API, và `docs/runbooks/supabase-storage.md`
+- `WK_ALLOWED_SHOPS` — `wildandking-demo.myshopify.com`
+- `WK_SKIP_HMAC` — để trống, trừ khi test cục bộ
 
-```dotenv
-# Shopify App Credentials
-SHOPIFY_API_KEY="21102b2e2138173c5ab87e5ad38ef1e4"
-SHOPIFY_API_SECRET="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"
-SHOPIFY_APP_URL="http://localhost:3000"
-SCOPES="read_products,write_products,read_orders,write_orders,read_themes,write_themes"
-
-# Database connection string (Supabase Postgres - project wild-king-customizer)
-DATABASE_URL="postgresql://postgres.jdobnvvorpkoqkpxcdhw:fjjrx9QOi9mvs4lZ2Lrn0AIvbW7m@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
-DIRECT_URL="postgresql://postgres.jdobnvvorpkoqkpxcdhw:fjjrx9QOi9mvs4lZ2Lrn0AIvbW7m@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-
-# Node Environment
-NODE_ENV="development"
-```
-
-**Khác biệt khi chạy trên Vercel (Production):** dùng đúng bộ trên nhưng đổi 2 biến:
-
-```dotenv
-SHOPIFY_APP_URL="https://wild-king-customizer.vercel.app"
-NODE_ENV="production"
-```
-
-Ghi chú:
-- `DATABASE_URL` (port **6543**) là pooled connection — bắt buộc giữ `?pgbouncer=true&connection_limit=1` vì Vercel chạy serverless, mỗi request là một instance mới.
-- `DIRECT_URL` (port **5432**) chỉ Prisma dùng lúc `db push` / `migrate`, không dùng ở runtime.
-- Cả 2 URL dùng chung 1 mật khẩu DB — đổi mật khẩu Supabase là phải sửa cả hai (ở `.env` local **và** Vercel Environment Variables).
-- `.env` đã nằm trong `.gitignore` nên sẽ không bị commit; file README này mới là nơi chứa giá trị.
-- File `.env.local` trong repo chỉ chứa `VERCEL_OIDC_TOKEN` do Vercel CLI tự sinh — không cần tạo tay.
+Xem `docs/runbooks/credential-rotation.md` khi cần đổi secret.
 
 ---
 
@@ -256,12 +234,14 @@ npm install
 
 # 3. Cấu hình môi trường
 cp .env.example .env
-#    → mở .env và dán nguyên khối ở mục "🔑 File .env thực tế đang dùng" phía trên
+#    → điền giá trị thật, xem mục "🔑 Lấy giá trị .env ở đâu" phía trên
 
-# 4. Sinh Prisma Client + đồng bộ schema + seed dữ liệu mẫu
+# 4. Sinh Prisma Client + đồng bộ schema
 npm run prisma:generate
 npm run prisma:push
-npm run prisma:seed
+#    Lần ĐẦU TIÊN trên một DB có schema cũ: lệnh này sẽ dừng và đòi RESET TOÀN
+#    BỘ database. Đọc docs/runbooks/supabase-storage.md mục "Áp schema lần đầu"
+#    TRƯỚC khi chạy.
 
 # 5. Build bundle cho theme extension
 npm run bundle:extension
@@ -278,15 +258,21 @@ npm run dev
 | `npm run build` | `prisma generate` → `bundle:extension` → `next build` (đây là lệnh Vercel chạy) |
 | `npm run bundle:extension` | Build lại widget storefront |
 | `npm run shopify:deploy` | Đẩy config app + theme extension lên Shopify |
+| `npm test` | Vitest hermetic (`vitest run`) — không chạm DB, `tests/` |
+| `npm run test:db` | Vitest chống Postgres thật, `tests-db/` — **cần Docker chạy**; tự dựng container tạm, từ chối mọi host không phải localhost |
 
-Truy cập: Admin tại `http://localhost:3000`, xem trước widget tại `http://localhost:3000/storefront-preview`.
+Truy cập: shell admin tạm thời (chờ P2) tại `http://localhost:3000`, xem trước widget tại `http://localhost:3000/storefront-preview`.
+
+> **`npm run lint` HỎNG — đừng chạy.** Repo không có config ESLint; `next lint` rơi vào prompt tương tác và treo terminal. Đây là gap đã biết, nằm ngoài phạm vi P1b. Mọi ràng buộc phong cách hiện do test + code review gánh.
 
 ---
 
-## 🔄 Luồng hoạt động end-to-end
+## 🔄 Luồng hoạt động — thiết kế (P2/P3), KHÔNG PHẢI trạng thái hiện tại
+
+Đây là luồng **dự kiến** theo `docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md`. Trừ bước ① (OAuth — đã chạy thật), các route ở dưới **chưa tồn tại trong code** — implement là việc của P2 (admin) và P3 (storefront + App Proxy).
 
 ```
-① CÀI ĐẶT (OAuth)
+① CÀI ĐẶT (OAuth) — ĐÃ CHẠY THẬT
    Merchant mở install link
      → GET /api/auth?shop=xxx.myshopify.com
      → redirect tới https://<shop>/admin/oauth/authorize
@@ -294,36 +280,37 @@ Truy cập: Admin tại `http://localhost:3000`, xem trước widget tại `http
      → verify HMAC → POST /admin/oauth/access_token → lưu accessToken vào bảng Shop
      → redirect về https://<shop>/admin/apps/<API_KEY>
 
-② KHÁCH TÙY CHỈNH TRÊN STOREFRONT
-   Trang sản phẩm render block customizer.liquid
-     → <div id="product-customizer-root" data-product-id="..." data-shop-domain="...">
-     → customizer-bundle.js mount React vào div đó
-     → GET /apps/customizer/customizer-config?productId=...   (App Proxy, có chữ ký HMAC)
-        └─ Shopify chuyển tiếp tới /api/proxy/customizer-config trên Vercel
-     → trả về ProductConfig + OptionGroups + OptionValues + rules
-     → khách chọn option, UI hiển thị giá tạm tính
+② ADMIN CẤU HÌNH (P2 — chưa viết)
+   Nhập attribute (Leather/Stitch/Animal/Style), gắn ProductHost, nhập giá vào
+   ma trận A/B (priceInput), upload SVG per style×animal, "Generate variants"
+   sinh Shopify variant thật rồi ghi ngược shopifyVariantId.
+     → toàn bộ dưới /api/admin/*, bắt buộc viết bằng withAdminSession
+        (xem CLAUDE.md; thư mục src/app/api/admin/ CHƯA tồn tại — P2 tạo nó)
 
-③ THÊM VÀO GIỎ
-   POST /api/cart/validate  { configId, productId, selections, engravingText, ... }
-     → calculateServerPrice() TÍNH LẠI GIÁ TỪ DB (không tin giá client gửi lên)
-     → tạo Design (status=DRAFT) + DesignSelection
-     → trả về summaryProperties, trong đó có _custom_design_id
-   → widget gọi Shopify Cart AJAX API, gắn summaryProperties làm line item properties
+③ KHÁCH TÙY CHỈNH TRÊN STOREFRONT (P3 — chưa viết)
+   Trang sản phẩm render block customizer.liquid → customizer-bundle.js mount
+   React vào #product-customizer-root
+     → GET /apps/customizer/... (App Proxy, có chữ ký HMAC) lấy config
+     → khách chọn option → POST /apps/customizer/designs
+     → server tính giá từ DB, tạo CustomDesign (DRAFT) + CustomDesignSelection
+     → trả property chứa id design
+   → widget gọi Shopify Cart AJAX API, gắn property làm line item property
 
-④ KHÁCH THANH TOÁN
+④ KHÁCH THANH TOÁN — webhook đã có, chờ property thật từ ③
    Shopify bắn webhook orders/create + orders/paid
      → POST /api/webhooks/orders-create
      → verify X-Shopify-Hmac-Sha256
-     → duyệt line_items, tìm property _custom_design_id
-     → Design.status = ORDERED  +  tạo ProductionJob (status = NEW)
+     → duyệt line_items, tìm property design id
+     → tạo OrderLineDesign (productionStatus = NEW)
 
-⑤ XƯỞNG SẢN XUẤT
-   Shopify Admin → Apps → Wild & King Customizer  (nhúng iframe wild-king-customizer.vercel.app)
-     → tab "Production Queue" gọi GET /api/admin/orders
-     → nhân viên đổi status qua PATCH /api/admin/orders  (NEW → IN_PRODUCTION → QC → SHIPPED)
+⑤ XƯỞNG SẢN XUẤT (P2 — chưa viết)
+   Admin UI → danh sách OrderLineDesign lọc theo productionStatus, đổi status
+   NEW → IN_PRODUCTION → QC → SHIPPED qua PATCH /api/admin/order-lines/:id
 ```
 
-**Vì sao giá phải tính ở server:** người dùng có thể sửa JS trên trình duyệt. `pricingEngine.ts` đọc `extraPrice` từ DB, áp `PriceRule`, kiểm `CompatibilityRule` và kiểm option `required` — đây là nguồn giá duy nhất được tin.
+**Vì sao giá phải tính ở server:** người dùng có thể sửa JS trên trình duyệt. Giá phải đọc từ `ProductStyleLeather`/`AnimalLeather` trong DB (không tin giá client gửi lên) — hiện chưa có route nào làm việc này; `pricingEngine.ts` cũ (chạy trên schema đã xoá) không còn tồn tại.
+
+Widget hiện tại (`CustomizerApp.tsx`) **chưa nối theo luồng trên**: nó dùng mảng option hardcode (`LEATHER_MATERIALS`, `BUCKLE_OPTIONS`) và POST tới `/apps/customizer/save-design` — route đó chưa tồn tại. Chấp nhận được vì chưa có theme thật nào bật block này; nối lại là việc của P3.
 
 ---
 
@@ -335,7 +322,7 @@ App này dùng **Custom Distribution** (cài trực tiếp cho 1 store), **khôn
 
 ```bash
 # Cách A: tự động (khuyến nghị) — đã bật GitHub integration
-git add -A
+git add <file cụ thể>
 git commit -m "feat: <mô tả>"
 git push origin main          # Vercel tự build & deploy trong ~2 phút
 
@@ -360,7 +347,7 @@ application_url = "https://wild-king-customizer.vercel.app"
 redirect_urls = [ "https://wild-king-customizer.vercel.app/api/auth/callback" ]
 
 [app_proxy]
-url = "https://wild-king-customizer.vercel.app/api/proxy"
+url = "/api/proxy"
 ```
 
 > ⚠️ TOML rất khó tính về thứ tự: mọi cặp `key = value` ở cấp gốc phải nằm **trước** bảng `[section]` đầu tiên. Đặt sau sẽ lỗi parse — lỗi này đã từng xảy ra.
@@ -374,7 +361,7 @@ npm run shopify:deploy       # = shopify app deploy
 
 Lệnh này đẩy lên Shopify: `shopify.app.toml` (URL, scopes, webhooks, app proxy) và toàn bộ `extensions/`. Shopify tạo một **version mới** và release nó.
 
-### Bước 4 — Cài app vào store (chỉ làm lần đầu)
+### Bước 4 — Cài app vào store (chỉ làm lần đầu, hoặc sau khi `prisma:push` xoá bảng `Shop`)
 
 1. Vào [Shopify Partners Dashboard](https://partners.shopify.com) → **Apps** → *Wild & King Customizer*.
 2. Chọn **Distribution** → **Custom distribution**.
@@ -396,12 +383,10 @@ shopify app dev --store=wildandking-demo.myshopify.com
 
 ### Bước 6 — Kiểm tra sau khi publish
 
-- [ ] Mở trang sản phẩm trên storefront → widget hiện, không kẹt ở "Đang tải…"
-- [ ] DevTools → Network: `/apps/customizer/customizer-config` trả **200** (không phải 401 → sai HMAC, hoặc 404 → app proxy chưa đúng)
-- [ ] Chọn option → giá cập nhật đúng
-- [ ] Add to cart → giỏ hàng hiển thị các thuộc tính tùy chỉnh
-- [ ] Đặt 1 đơn test → Shopify Admin → Apps → tab Production Queue phải xuất hiện job mới
-- [ ] Partners Dashboard → App → **Webhooks**: không có delivery nào fail
+- [ ] Backend: `curl -I` các endpoint ở Bước 1 trả đúng status.
+- [ ] Admin nhúng mở được trong Shopify Admin, không trắng trang (kiểm CSP).
+- [ ] Partners Dashboard → App → **Webhooks**: không có delivery nào fail.
+- [ ] Luồng storefront → add to cart → webhook → `OrderLineDesign` **chưa kiểm được** cho tới khi P2/P3 xong (route chưa tồn tại).
 
 ### Rollback
 
@@ -419,12 +404,19 @@ Backend Vercel: vào Vercel Dashboard → Deployments → chọn bản cũ → *
 |---|---|
 | Widget kẹt ở "Đang tải bảng tùy chỉnh…" | Bundle chưa build hoặc lỗi JS. Chạy `npm run bundle:extension` + `npm run shopify:deploy`, xem Console trình duyệt |
 | API proxy trả **401 Invalid HMAC signature** | `SHOPIFY_API_SECRET` trên Vercel sai/thiếu, hoặc gọi thẳng URL Vercel thay vì qua `/apps/customizer` |
-| API proxy trả **404** | `[app_proxy]` trong `shopify.app.toml` chưa deploy. Chạy `shopify app deploy` |
+| API proxy trả **404** | Route con dưới `/api/proxy/*` chưa tồn tại (P3 chưa xong), hoặc `[app_proxy]` trong `shopify.app.toml` chưa deploy — chạy `shopify app deploy` |
 | Admin không hiện trong Shopify (iframe trắng) | Thiếu header CSP `frame-ancestors` — kiểm tra `next.config.mjs`; hoặc `application_url` sai |
-| Đơn hàng không sinh ProductionJob | Line item thiếu property `_custom_design_id` (khách add to cart bằng nút gốc của theme), hoặc webhook fail — xem Partners → Webhooks |
+| `/api/admin/*` trả 403 | `WK_ALLOWED_SHOPS` thiếu hoặc không khớp shop domain (so sánh lowercase) trên Vercel — xem mục Biến môi trường |
+| `/api/admin/*` trả 401 | `SHOPIFY_API_SECRET`/`SHOPIFY_API_KEY` sai/thiếu, hoặc session token App Bridge hết hạn |
+| Route `/api/admin/*` mới build lỗi/test đỏ | Handler chưa viết đúng hình `export const METHOD = withAdminSession(...)` — `tests/app/api/admin/route-guard.test.ts` bắt lỗi này |
+| Upload SVG bị từ chối ở `uploadSanitizedSvg` | Caller quên `sanitizeSvgRoot()` trước khi gọi, hoặc truyền bytes gốc còn comment/DOCTYPE trước thẻ `<svg>` — xem CLAUDE.md mục "Ghi SVG vào Storage" |
+| Texture vỡ khi nạp inline trong SVG (nhưng `<img>` thường vẫn load được) | Thiếu CORS trên bucket Supabase — xem `docs/runbooks/supabase-storage.md` mục Kiểm chứng |
 | `PrismaClientInitializationError` trên Vercel | Thiếu `DATABASE_URL`/`DIRECT_URL`, hoặc quên `?pgbouncer=true&connection_limit=1` ở pooled URL |
+| `npm run prisma:push` dừng, báo "not possible to execute this step" hoặc đòi reset | Lần đầu áp schema P1b lên DB có schema cũ: cột bắt buộc `shopDomain` không default trên bảng `Shop` đang có hàng. Chỉ còn đường `npx prisma db push --force-reset` (xoá sạch mọi bảng). Làm theo runbook mục "Áp schema lần đầu" |
+| Tổng tiền đối soát đơn sai một cách kỳ lạ (ra chuỗi thay vì số) | Cộng trực tiếp hai cột `Decimal` bằng `+` — dùng `.plus()` của Decimal.js |
 | Lỗi parse `shopify.app.toml` | Có `key = value` cấp gốc nằm sau `[section]` — di chuyển lên đầu file |
 | Type error khi build sau khi sửa customizer | Đã đổi import React → Preact trong source. Hoàn nguyên về `react`; alias chỉ đặt ở `scripts/bundle-extension.mjs` |
+| `npm run lint` treo terminal | Đã biết — không có config ESLint. Đừng chạy lệnh này |
 
 Xem log production:
 ```bash
@@ -435,36 +427,31 @@ vercel logs https://wild-king-customizer.vercel.app --follow
 
 ## ✅ Bạn cần làm gì tiếp theo
 
-Trạng thái hiện tại: hạ tầng đã chạy (Vercel + Supabase + OAuth + App Proxy + Theme Extension đều live). Phần còn thiếu chủ yếu là hoàn thiện logic và kiểm thử.
+P1b (nền tảng dữ liệu), P2a (admin API — attribute CRUD, asset upload, product config, ma trận giá, readiness, tất cả bọc `withAdminSession`) và P2c (admin UI hai tab Attributes/Products, spec §12, `src/app/page.tsx` → `AdminShell`) đã xong. Những gì còn thiếu là **implement theo spec**, không phải sửa lỗi trên code cũ.
 
-### 🔴 Ưu tiên cao — có bug / rủi ro bảo mật
+**Trước khi giao P2c cho merchant thật:** chạy `docs/runbooks/admin-ui-manual-check.md` một lần trong Shopify Admin thật (dev store `wildandking-demo.myshopify.com`) — toàn bộ 756 test của phase này mock `window.shopify.idToken()`, nên chưa có gì xác nhận App Bridge thật hoạt động trong iframe thật.
 
-1. **Sửa lệch key giữa API và UI Dashboard.**
-   `GET /api/admin/orders` trả về `{ jobs, draftDesigns }`, nhưng `src/app/page.tsx` lại đọc `orderData.designs` → KPI luôn hiển thị 0. Ngoài ra code lọc theo `status === "READY_FOR_PRODUCTION"` trong khi schema chỉ có `NEW`/`IN_PRODUCTION`/`QC`/`SHIPPED`. Cần thống nhất tên trường và tập status.
+### 🔴 P2b — Sinh biến thể Shopify (chặn phần còn lại của Products tab)
 
-2. **Bổ sung xác thực cho `/api/admin/*`.**
-   Hai route này hiện **không kiểm tra danh tính** — bất kỳ ai biết URL đều gọi được và đọc/sửa dữ liệu đơn hàng. Cần verify session token của App Bridge (hoặc tối thiểu kiểm HMAC/`shop` param).
+1. **Shopify passthrough + sinh variant** (`/api/admin/shopify/*` đọc product/variant, `/api/admin/products/:id/variants/{preview,generate,sync}` — spec §8.1). Nút **"Generate variants" đã có trên UI** (`PriceMatrixSection.tsx`, cả hai ma trận style và animal) nhưng đang `disabled` với tooltip "chưa sẵn sàng" — chưa wire tới endpoint nào vì endpoint chưa tồn tại. `PriceCellDto.variant` luôn `null` cho tới khi việc này xong.
+2. **Quyết cách query admin scope theo `shopId`** cho các bảng join không mang `shopId` trực tiếp, nếu route mới cần — xem mẫu `loadProductForShop` đã dùng ở P2a (`src/lib/admin/products.ts`).
 
-3. **`/api/cart/validate` chưa xác thực và đang hardcode fallback.**
-   Route này tạo record `Design` mà không kiểm chữ ký; `shop` mặc định về `wildandking-demo.myshopify.com`, `productId` fallback `"8129384729101"`, giá fallback `65`. Nên đưa route này qua App Proxy (`/api/proxy/cart-validate`) để dùng chung cơ chế HMAC.
+### 🟡 P3 — Storefront + App Proxy
 
-4. **Kiểm thử webhook thật.** Đặt một đơn hàng test có `_custom_design_id` và xác nhận `ProductionJob` được tạo. Đây là mắt xích chưa được verify end-to-end.
+3. **Dựng lại route dưới `/apps/customizer/*`** (App Proxy) — `GET` lấy config, `POST /designs` tạo `CustomDesign` + tính giá server-side, dùng `src/shared/` cho request/response shape.
+4. **Nối lại widget** (`CustomizerApp.tsx`) theo luồng thật thay vì mảng option hardcode + POST thẳng `/apps/customizer/save-design`.
 
-### 🟡 Ưu tiên trung bình
+### 🟢 P4 — Cart, webhook, production queue
 
-5. **Xóa `src/app/admin/page.tsx`** — code cũ trùng chức năng với `src/app/page.tsx`, dễ gây nhầm khi sửa nhầm file.
-6. **Chuyển sang Prisma migration có version** (`prisma migrate`) thay cho `db push`, để thay đổi schema production có thể audit và rollback.
-7. **Xóa `prisma/dev.db`** — tàn dư SQLite, dự án đã dùng Postgres.
-8. **Commit thay đổi đang treo:** `shopify.app.toml` đang có sửa đổi chưa commit (Shopify CLI tự sắp xếp lại + đổi `app_proxy.url` thành URL tuyệt đối).
-9. **Bỏ `console.log`/`console.error` rải rác** trong các API route, thay bằng logger có cấu trúc.
+5. **Kiểm thử webhook thật end-to-end.** Đặt một đơn hàng test, xác nhận `OrderLineDesign` được tạo đúng, `groupIntact`/`totalMatchesQuote` tính đúng (coi chừng bẫy `Decimal` — xem mục Database).
+6. **Viết production queue** (spec §12.3 — danh sách `OrderLineDesign` lọc theo `productionStatus`, đổi status `NEW → IN_PRODUCTION → QC → SHIPPED`) — cần dữ liệu đơn hàng thật từ webhook trên nên không dựng được trước P4.
 
-### 🟢 Nên có
+### ⚪ Vận hành / nên có
 
-10. **Viết test** — hiện chưa có test nào. Ưu tiên: `pricingEngine.ts` (unit), `hmac.ts` (unit), luồng add-to-cart (E2E).
-11. **Upload ảnh preview thiết kế** — `Design.previewUrl` đã có trong schema nhưng chưa có luồng sinh/upload ảnh (cân nhắc Supabase Storage).
-12. **Xuất file cho xưởng** — nút tải PDF/PNG spec sản xuất từ tab Production Queue.
-13. **CRUD OptionGroup/OptionValue trong Admin UI** — hiện chỉ upsert được `ProductConfig`; muốn thêm màu da mới vẫn phải sửa `seed.mjs` hoặc vào Prisma Studio.
-14. **Thống nhất API version** — `shopify.app.toml` khai `2026-10`, `src/lib/shopify.ts` dùng `ApiVersion.October24`, `executeShopifyGraphQL` hardcode `2024-10`.
+7. **Tạo bucket Supabase Storage `wk-assets`** trên project thật nếu chưa có — `docs/runbooks/supabase-storage.md`.
+8. **Chuyển sang Prisma migration có version** (`prisma migrate`) thay cho `db push`, để thay đổi schema production có thể audit và rollback.
+9. **Sửa `npm run lint`** — chọn + cấu hình một bộ rule ESLint thật (hiện tại script gọi `next lint` nhưng không có config, rơi vào prompt tương tác và treo). Vẫn chưa ai nhận việc này qua P2a/P2c.
+10. **Bỏ `console.log`/`console.error` rải rác** trong các API route, thay bằng logger có cấu trúc.
 
 ---
 
@@ -474,4 +461,5 @@ Trạng thái hiện tại: hạ tầng đã chạy (Vercel + Supabase + OAuth +
 - [Shopify App Proxy](https://shopify.dev/docs/apps/build/online-store/display-dynamic-data)
 - [Shopify CLI configuration](https://shopify.dev/docs/apps/tools/cli/configuration)
 - [Prisma + Supabase](https://www.prisma.io/docs/orm/overview/databases/supabase)
+- [Supabase Storage](https://supabase.com/docs/guides/storage)
 - [Next.js App Router](https://nextjs.org/docs/app)

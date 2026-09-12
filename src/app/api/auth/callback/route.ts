@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
+import { hmacBypassEnabled } from "@/lib/hmac";
+import { isValidShopDomain } from "@/lib/auth/shopDomain";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -10,6 +12,13 @@ export async function GET(req: NextRequest) {
 
   if (!shop || !code || !hmac) {
     return NextResponse.json({ error: "Missing required OAuth parameters" }, { status: 400 });
+  }
+
+  // `shop` becomes the host of a fetch that carries `client_secret` in its
+  // body. Validate it before that request can be built, and before the HMAC
+  // check, which is skippable via WK_SKIP_HMAC on a developer machine.
+  if (!isValidShopDomain(shop)) {
+    return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
   }
 
   // Validate HMAC
@@ -25,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const calculatedHmac = crypto.createHmac("sha256", secret).update(queryString).digest("hex");
 
-  if (calculatedHmac !== hmac && process.env.NODE_ENV === "production") {
+  if (calculatedHmac !== hmac && !hmacBypassEnabled()) {
     return NextResponse.json({ error: "Invalid HMAC signature" }, { status: 400 });
   }
 
@@ -49,17 +58,20 @@ export async function GET(req: NextRequest) {
 
     // Save or update shop in Database
     await db.shop.upsert({
-      where: { shop },
+      where: { shopDomain: shop },
       update: {
         accessToken: tokenData.access_token,
         scope: tokenData.scope,
         installed: true,
+        // Cài lại: xoá dấu gỡ cài cũ, nếu không `uninstalledAt` sẽ nói dối.
+        uninstalledAt: null,
       },
       create: {
-        shop,
+        shopDomain: shop,
         accessToken: tokenData.access_token,
         scope: tokenData.scope,
         installed: true,
+        installedAt: new Date(),
       },
     });
 

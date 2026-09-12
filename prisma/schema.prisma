@@ -8,133 +8,442 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum AssetKind {
+  SVG_MOCKUP
+  TEXTURE
+  DISPLAY
+  DESIGN_SVG
+}
+
+enum DesignStatus {
+  DRAFT
+  ORDERED
+  CANCELLED
+}
+
+enum LineRole {
+  MAIN
+  ADDON
+}
+
+enum ProductionStatus {
+  NEW
+  IN_PRODUCTION
+  QC
+  SHIPPED
+  ON_HOLD
+}
+
+enum AttributeType {
+  STYLE
+  BODY_LEATHER
+  ANIMAL
+  ANIMAL_LEATHER
+  STITCH
+}
+
 model Shop {
-  id          String   @id @default(uuid())
-  shop        String   @unique
-  accessToken String
-  scope       String?
-  installed   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(cuid())
+  shopDomain    String    @unique
+  accessToken   String
+  scope         String?
+  installed     Boolean   @default(true)
+  installedAt   DateTime  @default(now())
+  uninstalledAt DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  assets   Asset[]
+  leathers Leather[]
+  stitches Stitch[]
+  animals  Animal[]
+  styles   Style[]
+  products CustomizableProduct[]
+  hosts    ProductHost[]
 }
 
-model ProductConfig {
-  id               String   @id @default(uuid()) // e.g. cfg_watchstrap_001
-  shop             String   @default("wildandking-demo.myshopify.com")
-  shopifyProductId String   @unique
-  productTitle     String
-  basePrice        Float    @default(0.0)
-  baseMockupUrl    String?
-  isEnabled        Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+// ── Thư viện file ─────────────────────────────────────────────
+model Asset {
+  id               String    @id @default(cuid())
+  shopId           String
+  shop             Shop      @relation(fields: [shopId], references: [id])
+  kind             AssetKind
+  storagePath      String
+  publicUrl        String
+  mimeType         String
+  byteSize         Int
+  checksumSha256   String
+  width            Int?
+  height           Int?
+  originalFilename String
+  svgValidatedAt   DateTime?
+  svgContractVer   String?
+  createdAt        DateTime  @default(now())
+  createdBy        String?
+  archivedAt       DateTime?
 
-  optionGroups       OptionGroup[]
-  compatibilityRules CompatibilityRule[]
-  priceRules         PriceRule[]
-  designs            Design[]
+  leatherDisplays Leather[]            @relation("LeatherDisplayImage")
+  leatherTextures Leather[]            @relation("LeatherTextureImage")
+  stitchDisplays  Stitch[]             @relation("StitchDisplayImage")
+  animalDisplays  Animal[]             @relation("AnimalDisplayImage")
+  styleDisplays   Style[]              @relation("StyleDisplayImage")
+  styleAnimalSvgs ProductStyleAnimal[] @relation("StyleAnimalSvg")
 
-  @@index([shop, shopifyProductId])
+  @@unique([shopId, kind, checksumSha256])
+  @@index([shopId, kind, archivedAt])
 }
 
-model OptionGroup {
-  id              String        @id @default(uuid())
-  productConfigId String
-  name            String // e.g. "Leather Type", "Buckle", "Lug Width", "Stitch"
-  type            String // LEATHER, BUCKLE, SIZE, STITCH, ENGRAVING, CUSTOM
-  required        Boolean       @default(true)
-  sortOrder       Int           @default(0)
-  productConfig   ProductConfig @relation(fields: [productConfigId], references: [id], onDelete: Cascade)
-  values          OptionValue[]
+// ── Attributes (phẳng) ────────────────────────────────────────
+model Leather {
+  id                  String    @id @default(cuid())
+  shopId              String
+  shop                Shop      @relation(fields: [shopId], references: [id])
+  name                String
+  slug                String
+  displayImageAssetId String
+  displayImage        Asset     @relation("LeatherDisplayImage", fields: [displayImageAssetId], references: [id])
+  textureImageAssetId String
+  textureImage        Asset     @relation("LeatherTextureImage", fields: [textureImageAssetId], references: [id])
+  isActive            Boolean   @default(true)
+  sortOrder           Int       @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([productConfigId])
+  styleLeathers  ProductStyleLeather[]
+  animalLeathers AnimalLeather[]
+
+  @@unique([shopId, slug])
+  @@index([shopId, archivedAt, isActive, sortOrder])
 }
 
-model OptionValue {
-  id            String      @id @default(uuid())
-  optionGroupId String
-  name          String // e.g. "Black Buttero (Italy)"
-  code          String // e.g. "buttero-black"
-  colorHex      String? // e.g. "#171717"
-  imageUrl      String?
-  extraPrice    Float       @default(0.0)
-  inStock       Boolean     @default(true)
-  sortOrder     Int         @default(0)
-  optionGroup   OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+model Stitch {
+  id                  String    @id @default(cuid())
+  shopId              String
+  shop                Shop      @relation(fields: [shopId], references: [id])
+  name                String
+  slug                String
+  displayImageAssetId String?
+  displayImage        Asset?    @relation("StitchDisplayImage", fields: [displayImageAssetId], references: [id], onDelete: Restrict)
+  colorHex            String // ^#[0-9A-F]{6}$ — chuẩn hoá lúc ghi
+  isActive            Boolean   @default(true)
+  sortOrder           Int       @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([optionGroupId])
+  productStitches     ProductStitch[]
+  styleAnimalDefaults ProductStyleAnimal[] @relation("StyleAnimalDefaultStitch")
+
+  @@unique([shopId, slug])
+  @@index([shopId, archivedAt, isActive, sortOrder])
 }
 
-model CompatibilityRule {
-  id                         String        @id @default(uuid())
-  productConfigId            String
-  ifOptionValueId            String
-  thenDisallowOptionValueIds String // JSON array of disallowed value IDs
-  reason                     String?
-  productConfig              ProductConfig @relation(fields: [productConfigId], references: [id], onDelete: Cascade)
+model Animal {
+  id                  String    @id @default(cuid())
+  shopId              String
+  shop                Shop      @relation(fields: [shopId], references: [id])
+  name                String
+  slug                String
+  displayImageAssetId String
+  displayImage        Asset     @relation("AnimalDisplayImage", fields: [displayImageAssetId], references: [id])
+  isActive            Boolean   @default(true)
+  sortOrder           Int       @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([productConfigId])
+  productAnimals ProductAnimal[]
+  styleAnimals   ProductStyleAnimal[]
+
+  @@unique([shopId, slug])
+  @@index([shopId, archivedAt, isActive, sortOrder])
 }
 
-model PriceRule {
-  id                       String        @id @default(uuid())
-  productConfigId          String
-  name                     String
-  conditionOptionValueIds  String // JSON array of value IDs that trigger this rule
-  additionalPrice          Float         @default(0.0)
-  productConfig            ProductConfig @relation(fields: [productConfigId], references: [id], onDelete: Cascade)
+model Style {
+  id                  String    @id @default(cuid())
+  shopId              String
+  shop                Shop      @relation(fields: [shopId], references: [id])
+  name                String
+  slug                String
+  displayImageAssetId String
+  displayImage        Asset     @relation("StyleDisplayImage", fields: [displayImageAssetId], references: [id])
+  isActive            Boolean   @default(true)
+  sortOrder           Int       @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([productConfigId])
+  productStyles ProductStyle[]
+  preselectedBy ProductHost[]  @relation("ProductHostPreselectStyle")
+
+  @@unique([shopId, slug])
+  @@index([shopId, archivedAt, isActive, sortOrder])
 }
 
-model Design {
-  id              String         @id @default(uuid()) // dsg_xxxx
-  productConfigId String?
-  shop            String
-  productId       String
-  variantId       String?
-  engravingText   String?
-  engravingFont   String?
-  engravingColor  String?
-  previewUrl      String?
-  totalExtraPrice Float          @default(0.0)
-  rawSelections   String? // JSON of full selections
-  pricingJson     String? // JSON of price breakdown
-  status          String         @default("DRAFT") // DRAFT, ORDERED, IN_PRODUCTION, QC, SHIPPED
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+// ── Product cấu hình ──────────────────────────────────────────
+model CustomizableProduct {
+  id         String    @id @default(cuid())
+  shopId     String
+  shop       Shop      @relation(fields: [shopId], references: [id])
+  name       String // nhãn nội bộ
+  isEnabled  Boolean   @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  productConfig   ProductConfig? @relation(fields: [productConfigId], references: [id])
-  selections      DesignSelection[]
-  productionJob   ProductionJob?
+  hosts    ProductHost[]
+  styles   ProductStyle[]
+  animals  ProductAnimal[]
+  stitches ProductStitch[]
 
-  @@index([shop, productId])
+  @@index([shopId, isEnabled])
 }
 
-model DesignSelection {
-  id         String   @id @default(uuid())
-  designId   String
-  groupName  String
-  valueName  String
-  extraPrice Float    @default(0.0)
-  design     Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+// Trang sản phẩm Shopify nào được phép render customizer này.
+// Cần thiết vì bộ sinh có thể đóng gói thành 1 hoặc N Shopify product;
+// App Block chỉ biết product.id của trang nó đang đứng.
+model ProductHost {
+  id                String              @id @default(cuid())
+  shopId            String
+  shop              Shop                @relation(fields: [shopId], references: [id])
+  productId         String
+  product           CustomizableProduct @relation(fields: [productId], references: [id])
+  shopifyProductId  String
+  shopifyProductGid String
+  handleSnapshot    String?
+  titleSnapshot     String?
+  preselectStyleId  String? // khi đóng gói 1 product mỗi style
+  // Quan hệ optional nhưng vẫn Restrict, KHÔNG để mặc định SetNull: attribute không bao giờ
+  // hard-delete (spec §7.3). Nếu SetNull, một Style chỉ còn host này tham chiếu sẽ xoá được,
+  // preselectStyleId âm thầm thành NULL và trang product thôi preselect mà không báo gì.
+  // "Bỏ chọn" hợp lệ vẫn là một UPDATE thường vì cột nullable. Áp cùng lý do cho mọi quan hệ
+  // optional trong file — tests/prisma/schema.test.ts giữ luật này.
+  preselectStyle    Style?              @relation("ProductHostPreselectStyle", fields: [preselectStyleId], references: [id], onDelete: Restrict)
+  isPrimary         Boolean             @default(false)
+  syncedAt          DateTime?
 
+  @@unique([shopId, shopifyProductId]) // ★ 1 trang chỉ thuộc 1 customizer
+  @@index([productId])
+}
+
+// ── Ma trận A: style × body leather (CÓ GIÁ) ──────────────────
+model ProductStyle {
+  id        String              @id @default(cuid())
+  productId String
+  product   CustomizableProduct @relation(fields: [productId], references: [id])
+  styleId   String
+  style     Style               @relation(fields: [styleId], references: [id])
+  isActive  Boolean             @default(true)
+  sortOrder Int                 @default(0)
+
+  styleLeathers ProductStyleLeather[]
+  styleAnimals  ProductStyleAnimal[]
+
+  @@unique([productId, styleId])
+}
+
+model ProductStyleLeather {
+  id             String       @id @default(cuid())
+  productStyleId String
+  productStyle   ProductStyle @relation(fields: [productStyleId], references: [id])
+  leatherId      String
+  leather        Leather      @relation(fields: [leatherId], references: [id])
+
+  // Nullable: admin gõ và lưu giá (priceInput) TRƯỚC khi bấm Generate variants
+  // (spec §12.2). Postgres cho nhiều NULL dưới @@unique, nên "một variant chỉ
+  // thuộc một cặp" vẫn đúng cho mọi hàng ĐÃ có variant. Storefront chỉ đọc hàng
+  // có shopifyVariantId khác NULL và variantMissing = false.
+  shopifyProductId     String?
+  shopifyVariantId     String?
+  shopifyVariantGid    String?
+  variantTitleSnapshot String?
+  variantSkuSnapshot   String?
+  priceInput           Decimal?  @db.Decimal(10, 2) // giá admin gõ vào lưới, chưa chắc đã sync
+  variantPriceSnapshot Decimal?  @db.Decimal(10, 2) // giá đọc ngược từ Shopify — CHỈ admin xem
+  variantSyncedAt      DateTime?
+  variantMissing       Boolean   @default(false)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  @@unique([productStyleId, leatherId])
+  @@unique([shopifyVariantId])
+  @@index([shopifyProductId])
+}
+
+// ── Ma trận B: animal × animal leather (CÓ GIÁ, độc lập style) ─
+model ProductAnimal {
+  id        String              @id @default(cuid())
+  productId String
+  product   CustomizableProduct @relation(fields: [productId], references: [id])
+  animalId  String
+  animal    Animal              @relation(fields: [animalId], references: [id])
+  isActive  Boolean             @default(true)
+  sortOrder Int                 @default(0)
+
+  animalLeathers AnimalLeather[]
+
+  @@unique([productId, animalId])
+}
+
+model AnimalLeather {
+  id              String        @id @default(cuid())
+  productAnimalId String
+  productAnimal   ProductAnimal @relation(fields: [productAnimalId], references: [id])
+  leatherId       String
+  leather         Leather       @relation(fields: [leatherId], references: [id])
+
+  shopifyProductId     String?
+  shopifyVariantId     String?
+  shopifyVariantGid    String?
+  variantTitleSnapshot String?
+  priceInput           Decimal?  @db.Decimal(10, 2) // giá admin gõ vào lưới, chưa chắc đã sync
+  variantPriceSnapshot Decimal?  @db.Decimal(10, 2) // giá đọc ngược từ Shopify
+  variantSyncedAt      DateTime?
+  variantMissing       Boolean   @default(false)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  @@unique([productAnimalId, leatherId])
+  @@unique([shopifyVariantId])
+  @@index([shopifyProductId])
+}
+
+// ── SVG per Style × Animal ────────────────────────────────────
+model ProductStyleAnimal {
+  id              String       @id @default(cuid())
+  productStyleId  String
+  productStyle    ProductStyle @relation(fields: [productStyleId], references: [id])
+  animalId        String
+  animal          Animal       @relation(fields: [animalId], references: [id])
+  displayLabel    String?
+  description     String?
+  svgAssetId      String
+  svgAsset        Asset        @relation("StyleAnimalSvg", fields: [svgAssetId], references: [id])
+  defaultStitchId String?
+  defaultStitch   Stitch?      @relation("StyleAnimalDefaultStitch", fields: [defaultStitchId], references: [id], onDelete: Restrict)
+  isActive        Boolean      @default(true)
+  sortOrder       Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([productStyleId, animalId])
+  @@index([productStyleId, isActive, sortOrder])
+}
+
+model ProductStitch {
+  id        String              @id @default(cuid())
+  productId String
+  product   CustomizableProduct @relation(fields: [productId], references: [id])
+  stitchId  String
+  stitch    Stitch              @relation(fields: [stitchId], references: [id])
+  isActive  Boolean             @default(true)
+  sortOrder Int                 @default(0)
+
+  @@unique([productId, stitchId])
+}
+
+// ── Design (bất biến) ─────────────────────────────────────────
+// R5: cụm này KHÔNG mang khoá ngoại nào — kể cả shopId. Snapshot là nguồn
+// sự thật cho đơn đã đặt; archive/xoá attribute không được phá đơn cũ.
+model CustomDesign {
+  id             String       @id // cd_<nanoid21>
+  shopId         String
+  productId      String
+  status         DesignStatus @default(DRAFT)
+  shareToken     String // nanoid22, ngẫu nhiên
+  idempotencyKey String?
+
+  mainVariantId  String
+  addonVariantId String
+  quotedTotal    Decimal @db.Decimal(10, 2)
+
+  styleId              String?
+  styleName            String
+  bodyLeatherId        String?
+  bodyLeatherName      String
+  bodyTextureAssetId   String
+  animalId             String?
+  animalName           String
+  animalLeatherId      String?
+  animalLeatherName    String
+  animalTextureAssetId String
+  stitchId             String?
+  stitchName           String
+  stitchHex            String
+
+  svgAssetId      String
+  bakedSvgAssetId String
+
+  snapshot        Json
+  snapshotVersion Int  @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, shareToken])
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, mainVariantId])
+}
+
+model CustomDesignSelection {
+  id            String        @id @default(cuid())
+  designId      String
+  attributeType AttributeType
+  attributeId   String // soft ref, KHÔNG FK
+  label         String
+  value         String
+  colorHex      String?
+  assetId       String?
+  sortOrder     Int
+
+  @@unique([designId, attributeType])
   @@index([designId])
 }
 
-model ProductionJob {
-  id                 String   @id @default(uuid())
-  designId           String   @unique
-  shopifyOrderId     String
-  shopifyOrderNumber String
-  customerEmail      String?
-  shippingAddress    String?
-  status             String   @default("NEW") // NEW, IN_PRODUCTION, QC, SHIPPED
-  notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+// ── Đơn hàng + sản xuất ───────────────────────────────────────
+model OrderLineDesign {
+  id       String @id @default(cuid())
+  shopId   String
+  designId String
 
-  design             Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+  shopifyOrderId    String
+  shopifyOrderName  String
+  shopifyLineItemId String
+  quantity          Int
+  soldVariantId     String
+  lineRole          LineRole
 
-  @@index([shopifyOrderId])
+  groupIntact       Boolean @default(true) // đủ MAIN + ADDON, qty khớp
+  totalMatchesQuote Boolean @default(true) // tổng khớp quotedTotal
+
+  customerEmail       String?
+  shippingAddressJson Json?
+  orderedAt           DateTime
+
+  productionStatus ProductionStatus @default(NEW)
+  productionNotes  String?
+  statusUpdatedAt  DateTime?
+  statusUpdatedBy  String?
+
+  @@unique([shopifyOrderId, shopifyLineItemId])
+  @@index([shopId, productionStatus, orderedAt])
+  @@index([designId])
+}
+
+model WebhookEvent {
+  id               String    @id @default(cuid())
+  shopifyWebhookId String
+  topic            String
+  shopDomain       String
+  status           String    @default("RECEIVED")
+  attempts         Int       @default(0)
+  lastError        String?
+  receivedAt       DateTime  @default(now())
+  processedAt      DateTime?
+
+  @@unique([shopifyWebhookId])
+  @@index([topic, receivedAt])
 }

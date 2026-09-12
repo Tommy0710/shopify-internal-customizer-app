@@ -130,7 +130,7 @@ export default function StorefrontPreviewPage() {
                   productId="8129384729101"
                   variantId="44910293810231"
                   shopDomain="wildandking-demo.myshopify.com"
-                  proxyUrl="/api/cart/validate"
+                  proxyUrl="/apps/customizer"
                   blockTitle="🎨 Tùy Chỉnh Thiết Kế (Wild & King Bespoke)"
                   btnText="Thêm vào giỏ hàng với thiết kế này"
                   primaryColor="#008060"

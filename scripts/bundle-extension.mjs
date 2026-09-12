@@ -30,6 +30,7 @@ try {
       "react-dom/client": "preact/compat/client",
       "react-dom": "preact/compat",
       "react/jsx-runtime": "preact/jsx-runtime",
+      "@": path.resolve(process.cwd(), "src"),
     },
     loader: {
       ".png": "dataurl",
