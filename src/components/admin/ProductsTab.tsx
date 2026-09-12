@@ -9,6 +9,7 @@ import { HostsSection } from "./products/HostsSection";
 import { RelationChecklist } from "./products/RelationChecklist";
 import { ReadinessBanner } from "./products/ReadinessBanner";
 import { PriceMatrixSection } from "./products/PriceMatrixSection";
+import { SvgGridSection } from "./products/SvgGridSection";
 import type { ProductSummaryDto, ProductTreeDto } from "@/lib/admin/products";
 
 /**
@@ -195,14 +196,7 @@ function ProductDetail({ id, onBack }: ProductDetailProps) {
       <PriceMatrixSection matrix="style" product={product} onSaved={refetch} />
       <PriceMatrixSection matrix="animal" product={product} onSaved={refetch} />
 
-      <Card>
-        <BlockStack gap="200">
-          <Text as="h2" variant="headingMd">
-            Lưới SVG mockup (style × animal)
-          </Text>
-          <Text as="p">Sẽ có ở Task 6.</Text>
-        </BlockStack>
-      </Card>
+      <SvgGridSection product={product} onSaved={refetch} />
     </BlockStack>
   );
 }

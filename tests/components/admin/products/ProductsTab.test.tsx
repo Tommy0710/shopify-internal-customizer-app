@@ -122,7 +122,7 @@ describe("ProductsTab — detail", () => {
     expect(window.location.search).not.toContain("product=");
   });
 
-  it("ma trận giá (Task 5) render hai section thật; lưới SVG vẫn placeholder (Task 6)", async () => {
+  it("ma trận giá (Task 5) và lưới SVG mockup (Task 6) đều render section thật, không còn placeholder nào", async () => {
     stubAppBridge();
     const tree = makeProductTree({ id: "p1", name: "Detail Wallet" });
     vi.stubGlobal(
@@ -140,6 +140,10 @@ describe("ProductsTab — detail", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Detail Wallet" })).toBeInTheDocument());
     expect(screen.getByText("Styles & body pricing")).toBeInTheDocument();
     expect(screen.getByText("Animals & applique pricing")).toBeInTheDocument();
-    expect(screen.getByText("Sẽ có ở Task 6.")).toBeInTheDocument();
+    expect(screen.getByText("SVG mockups (Style × Animal)")).toBeInTheDocument();
+    // Product fixture rỗng — SvgGridSection tự hiện trạng thái trống thật,
+    // không phải câu "Sẽ có ở Task 6." tĩnh nữa.
+    expect(screen.queryByText(/Sẽ có ở Task 6/)).not.toBeInTheDocument();
+    expect(screen.getByText(/chưa có style hoặc animal active nào/i)).toBeInTheDocument();
   });
 });
