@@ -998,6 +998,8 @@ Nếu ai đó xoá hoặc đổi variant trong Shopify Admin, `shopifyVariantId`
 
 Đúng **hai tab**: `Attributes` và `Products`. Ngôn ngữ: English 100%.
 
+**Trạng thái (đã build ở phase gọi là "P2c" trong `docs/superpowers/plans/2026-09-11-p2c-admin-ui.md` — verify trực tiếp trên code trước khi sửa mục này; đừng nhầm với nhãn "P2c" cũ ở §8.1 phía trên, đó là designs/production-queue, giờ đã dời sang P4):** cả hai tab mô tả ở §12.1/§12.2 bên dưới đã viết và có test (`npm test`, 756 test qua jsdom cho phần component) — `src/components/admin/AdminShell.tsx` render dưới đúng route `"/"` (Ruling R6, không route App Router nào khác cho bất cứ màn hình admin nào — xem CLAUDE.md), gọi `/api/admin/*` thật (P2a) qua App Bridge session token CDN (không phải `@shopify/app-bridge-react`). **Chưa build**: thực thi "Generate variants" — nút đã có trên UI (`PriceMatrixSection.tsx`) nhưng `disabled`, chờ P2b sinh biến thể Shopify thật; và toàn bộ §12.3 Production queue — chờ P4 có dữ liệu đơn hàng từ webhook.
+
 ### 12.1. Tab Attributes
 
 Sub-nav: `Leathers · Stitches · Animals · Styles`. Bốn nhóm dùng chung component list + drawer, khác nhau ở form field:
@@ -1045,6 +1047,8 @@ Click ô Style × Animal → drawer: display label, description, **upload SVG** 
 `Generate variants` hiện trước con số và phương án đóng gói, chờ xác nhận, rồi chạy.
 
 ### 12.3. Production queue
+
+**Chưa build** (cần `OrderLineDesign` thật từ webhook đơn hàng — P4; không dựng được trước đó).
 
 Danh sách `OrderLineDesign` lọc theo `productionStatus`, hiện baked SVG, snapshot đầy đủ, cờ 🚩 khi đối soát lệch, đổi status `NEW → IN_PRODUCTION → QC → SHIPPED`.
 

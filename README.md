@@ -6,7 +6,7 @@ Kiến trúc theo chuẩn **Shopify Online Store 2.0**: `Theme App Extension` (w
 
 > **Đọc file này trước khi làm bất cứ việc gì.** Phần [Bạn cần làm gì tiếp theo](#-bạn-cần-làm-gì-tiếp-theo) ở cuối liệt kê các việc còn dang dở.
 >
-> **Trạng thái hiện tại (sau P1b — nền tảng dữ liệu):** schema Postgres (18 model), Supabase Storage, và hợp đồng zod dùng chung storefront/admin đã xong. **Phần lớn route API và toàn bộ admin UI hai tab (Attributes · Products) chưa được viết** — đó là P2/P3. Đừng tin theo trí nhớ về "luồng end-to-end" của bản thiết kế cũ (dùng `ProductConfig`/`OptionGroup`/`Design`…) — schema đó đã bị xoá. Nguồn sự thật cho thiết kế mới là `docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md`.
+> **Trạng thái hiện tại (sau P2c):** schema Postgres (18 model), Supabase Storage, hợp đồng zod dùng chung storefront/admin (P1b), admin API cấu hình (attribute CRUD, asset upload, product config, ma trận giá, readiness — P2a), và admin UI hai tab Attributes/Products (P2c, spec §12) đã xong — chạy tại `src/app/page.tsx`, verify thật trong Shopify Admin chưa làm (xem `docs/runbooks/admin-ui-manual-check.md`). **Còn thiếu:** sinh biến thể Shopify (nút "Generate variants" có trên UI nhưng disabled — P2b), route storefront `/apps/customizer/*` (P3), và production queue (P4). Đừng tin theo trí nhớ về "luồng end-to-end" của bản thiết kế cũ (dùng `ProductConfig`/`OptionGroup`/`Design`…) — schema đó đã bị xoá. Nguồn sự thật cho thiết kế mới là `docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md`.
 
 ---
 
@@ -427,25 +427,30 @@ vercel logs https://wild-king-customizer.vercel.app --follow
 
 ## ✅ Bạn cần làm gì tiếp theo
 
-P1b (nền tảng dữ liệu) đã xong: schema 18 model, Supabase Storage, hợp đồng zod `src/shared/`, một Shopify API version duy nhất, `withAdminSession` bắt buộc cho mọi route admin. Những gì còn thiếu là **implement theo spec**, không phải sửa lỗi trên code cũ.
+P1b (nền tảng dữ liệu), P2a (admin API — attribute CRUD, asset upload, product config, ma trận giá, readiness, tất cả bọc `withAdminSession`) và P2c (admin UI hai tab Attributes/Products, spec §12, `src/app/page.tsx` → `AdminShell`) đã xong. Những gì còn thiếu là **implement theo spec**, không phải sửa lỗi trên code cũ.
 
-### 🔴 P2 — Admin (ưu tiên cao nhất, chặn P3)
+**Trước khi giao P2c cho merchant thật:** chạy `docs/runbooks/admin-ui-manual-check.md` một lần trong Shopify Admin thật (dev store `wildandking-demo.myshopify.com`) — toàn bộ 756 test của phase này mock `window.shopify.idToken()`, nên chưa có gì xác nhận App Bridge thật hoạt động trong iframe thật.
 
-1. **Viết toàn bộ `/api/admin/*` theo spec §8.1** (`docs/superpowers/specs/2026-09-08-wk-customizer-redesign-design.md`) — attribute CRUD (leathers/stitches/animals/styles), asset upload (`POST /api/admin/assets` — server sanitize rồi mới lưu, ruling R2, xem spec §8.1), Shopify passthrough (đọc product/variant), product config + ma trận giá (A: style×leather, B: animal×leather), sinh variant (`preview`/`generate`/`sync`), designs & production queue. **Mọi handler bắt buộc viết bằng `withAdminSession`** — `tests/app/api/admin/route-guard.test.ts` sẽ đỏ nếu quên.
-2. **Viết admin UI hai tab** (Attributes · Products, spec §12) thay cho shell tạm ở `src/app/page.tsx`.
-3. **Quyết cách query admin scope theo `shopId`** cho các bảng join không mang `shopId` trực tiếp (`ProductStyle`, `ProductStyleLeather`, `ProductAnimal`, `AnimalLeather`, `ProductStyleAnimal`, `ProductStitch`, `CustomDesignSelection`) — phải join ngược lên `CustomizableProduct`. Quyết trước khi viết query đầu tiên.
+### 🔴 P2b — Sinh biến thể Shopify (chặn phần còn lại của Products tab)
+
+1. **Shopify passthrough + sinh variant** (`/api/admin/shopify/*` đọc product/variant, `/api/admin/products/:id/variants/{preview,generate,sync}` — spec §8.1). Nút **"Generate variants" đã có trên UI** (`PriceMatrixSection.tsx`, cả hai ma trận style và animal) nhưng đang `disabled` với tooltip "chưa sẵn sàng" — chưa wire tới endpoint nào vì endpoint chưa tồn tại. `PriceCellDto.variant` luôn `null` cho tới khi việc này xong.
+2. **Quyết cách query admin scope theo `shopId`** cho các bảng join không mang `shopId` trực tiếp, nếu route mới cần — xem mẫu `loadProductForShop` đã dùng ở P2a (`src/lib/admin/products.ts`).
 
 ### 🟡 P3 — Storefront + App Proxy
 
-4. **Dựng lại route dưới `/apps/customizer/*`** (App Proxy) — `GET` lấy config, `POST /designs` tạo `CustomDesign` + tính giá server-side, dùng `src/shared/` cho request/response shape.
-5. **Nối lại widget** (`CustomizerApp.tsx`) theo luồng thật thay vì mảng option hardcode + POST thẳng `/apps/customizer/save-design`.
-6. **Kiểm thử webhook thật end-to-end.** Đặt một đơn hàng test, xác nhận `OrderLineDesign` được tạo đúng, `groupIntact`/`totalMatchesQuote` tính đúng (coi chừng bẫy `Decimal` — xem mục Database).
+3. **Dựng lại route dưới `/apps/customizer/*`** (App Proxy) — `GET` lấy config, `POST /designs` tạo `CustomDesign` + tính giá server-side, dùng `src/shared/` cho request/response shape.
+4. **Nối lại widget** (`CustomizerApp.tsx`) theo luồng thật thay vì mảng option hardcode + POST thẳng `/apps/customizer/save-design`.
 
-### 🟢 Vận hành / nên có
+### 🟢 P4 — Cart, webhook, production queue
+
+5. **Kiểm thử webhook thật end-to-end.** Đặt một đơn hàng test, xác nhận `OrderLineDesign` được tạo đúng, `groupIntact`/`totalMatchesQuote` tính đúng (coi chừng bẫy `Decimal` — xem mục Database).
+6. **Viết production queue** (spec §12.3 — danh sách `OrderLineDesign` lọc theo `productionStatus`, đổi status `NEW → IN_PRODUCTION → QC → SHIPPED`) — cần dữ liệu đơn hàng thật từ webhook trên nên không dựng được trước P4.
+
+### ⚪ Vận hành / nên có
 
 7. **Tạo bucket Supabase Storage `wk-assets`** trên project thật nếu chưa có — `docs/runbooks/supabase-storage.md`.
 8. **Chuyển sang Prisma migration có version** (`prisma migrate`) thay cho `db push`, để thay đổi schema production có thể audit và rollback.
-9. **Sửa `npm run lint`** — chọn + cấu hình một bộ rule ESLint thật (hiện tại script gọi `next lint` nhưng không có config, rơi vào prompt tương tác và treo). Nằm ngoài phạm vi P1b, chưa ai nhận việc này.
+9. **Sửa `npm run lint`** — chọn + cấu hình một bộ rule ESLint thật (hiện tại script gọi `next lint` nhưng không có config, rơi vào prompt tương tác và treo). Vẫn chưa ai nhận việc này qua P2a/P2c.
 10. **Bỏ `console.log`/`console.error` rải rác** trong các API route, thay bằng logger có cấu trúc.
 
 ---
